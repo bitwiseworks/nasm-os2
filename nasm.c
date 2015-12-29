@@ -88,6 +88,7 @@ static int using_debug_info, opt_verbose_info;
 bool tasm_compatible_mode = false;
 int pass0, passn;
 int maxbits = 0;
+static bool allow_64bit_code_anywhere = false;
 int globalrel = 0;
 int globalbnd = 0;
 
@@ -616,9 +617,11 @@ struct textargs {
 
 #define OPT_PREFIX 0
 #define OPT_POSTFIX 1
+#define OPT_64BIT_CODE_ANYWHERE 2
 struct textargs textopts[] = {
     {"prefix", OPT_PREFIX},
     {"postfix", OPT_POSTFIX},
+    {"allow-64bit-code-anywhere", OPT_64BIT_CODE_ANYWHERE},
     {NULL, 0}
 };
 
@@ -804,7 +807,10 @@ static bool process_arg(char *p, char *q)
                  "    -h          show invocation summary and exit\n\n"
                  "--prefix,--postfix\n"
                  "  this options prepend or append the given argument to all\n"
-                 "  extern and global variables\n\n"
+                 "  extern and global variables\n"
+                 "--allow-64bit-code-anywhere\n"
+                 "  do not restrict 64-bit code to 64-bit capable output\n"
+                 "  formats (use with care, no complaining)\n\n"
                  "Warnings:\n");
             for (i = 0; i <= ERR_WARN_MAX; i++)
                 printf("    %-23s %s (default %s)\n",
@@ -971,6 +977,9 @@ set_warning:
                         }
                         break;
                     }
+                case OPT_64BIT_CODE_ANYWHERE:
+                    allow_64bit_code_anywhere = true;
+                    break;
                 default:
                     {
                         nasm_error(ERR_NONFATAL | ERR_NOFILE | ERR_USAGE,
@@ -2088,7 +2097,7 @@ static int get_bits(char *value)
                          "cannot specify 64-bit segment on processor below an x86-64");
             i = 16;
         }
-        if (i != maxbits) {
+        if if (i != maxbits && !allow_64bit_code_anywhere) {
             nasm_error(ERR_NONFATAL,
                          "%s output format does not support 64-bit code",
                          ofmt->shortname);
