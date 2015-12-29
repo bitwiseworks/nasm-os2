@@ -2097,7 +2097,7 @@ static int get_bits(char *value)
                          "cannot specify 64-bit segment on processor below an x86-64");
             i = 16;
         }
-        if if (i != maxbits && !allow_64bit_code_anywhere) {
+        if (i != maxbits && !allow_64bit_code_anywhere) {
             nasm_error(ERR_NONFATAL,
                          "%s output format does not support 64-bit code",
                          ofmt->shortname);
