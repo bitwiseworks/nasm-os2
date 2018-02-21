@@ -42,16 +42,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <inttypes.h>
 
 #include "nasm.h"
 #include "nasmlib.h"
+#include "error.h"
 #include "saa.h"
 #include "raa.h"
 #include "stdscan.h"
 #include "eval.h"
-#include "output/outform.h"
-#include "output/outlib.h"
+#include "outform.h"
+#include "outlib.h"
 
 #if defined OF_AOUT || defined OF_AOUTB
 
@@ -188,7 +188,7 @@ static void aout_init(void)
 
 #ifdef OF_AOUTB
 
-extern struct ofmt of_aoutb;
+extern const struct ofmt of_aoutb;
 
 static void aoutb_init(void)
 {
@@ -211,11 +211,9 @@ static void aoutb_init(void)
 
 #endif
 
-static void aout_cleanup(int debuginfo)
+static void aout_cleanup(void)
 {
     struct Reloc *r;
-
-    (void)debuginfo;
 
     aout_pad_sections();
     aout_fixup_relocs(&stext);
@@ -246,11 +244,10 @@ static int32_t aout_section_names(char *name, int pass, int *bits)
     /*
      * Default to 32 bits.
      */
-    if (!name)
+    if (!name) {
         *bits = 32;
-
-    if (!name)
         return stext.index;
+    }
 
     if (!strcmp(name, ".text"))
         return stext.index;
@@ -294,14 +291,11 @@ static void aout_deflabel(char *name, int32_t segment, int64_t offset,
                 expr *e;
                 char *p = special;
 
-                while (*p && !nasm_isspace(*p))
-                    p++;
-                while (*p && nasm_isspace(*p))
-                    p++;
+                p = nasm_skip_spaces(nasm_skip_word(p));
                 stdscan_reset();
                 stdscan_set(p);
                 tokval.t_type = TOKEN_INVALID;
-                e = evaluate(stdscan, NULL, &tokval, NULL, 1, nasm_error, NULL);
+                e = evaluate(stdscan, NULL, &tokval, NULL, 1, NULL);
                 if (e) {
                     if (!is_simple(e))
                         nasm_error(ERR_NONFATAL, "cannot use relocatable"
@@ -395,8 +389,7 @@ static void aout_deflabel(char *name, int32_t segment, int64_t offset,
                     stdscan_reset();
                     stdscan_set(special + n);
                     tokval.t_type = TOKEN_INVALID;
-                    e = evaluate(stdscan, NULL, &tokval, &fwd, 0, nasm_error,
-                                 NULL);
+                    e = evaluate(stdscan, NULL, &tokval, &fwd, 0, NULL);
                     if (fwd) {
                         sym->nextfwd = fwds;
                         fwds = sym;
@@ -622,6 +615,8 @@ static void aout_out(int32_t segto, const void *data,
         return;
     }
 
+    memset(mydata, 0, sizeof(mydata));
+
     if (type == OUT_RESERVE) {
         if (s) {
             nasm_error(ERR_WARNING, "uninitialized space declared in"
@@ -632,10 +627,10 @@ static void aout_out(int32_t segto, const void *data,
             sbss.len += size;
     } else if (type == OUT_RAWDATA) {
         if (segment != NO_SEG)
-            nasm_error(ERR_PANIC, "OUT_RAWDATA with other than NO_SEG");
+            nasm_panic(0, "OUT_RAWDATA with other than NO_SEG");
         aout_sect_write(s, data, size);
     } else if (type == OUT_ADDRESS) {
-        int asize = abs(size);
+        int asize = abs((int)size);
         addr = *(int64_t *)data;
         if (segment != NO_SEG) {
             if (segment % 2) {
@@ -684,7 +679,7 @@ static void aout_out(int32_t segto, const void *data,
         aout_sect_write(s, mydata, asize);
     } else if (type == OUT_REL2ADR) {
         if (segment == segto)
-            nasm_error(ERR_PANIC, "intra-segment OUT_REL2ADR");
+            nasm_panic(0, "intra-segment OUT_REL2ADR");
         if (segment != NO_SEG && segment % 2) {
             nasm_error(ERR_NONFATAL, "a.out format does not support"
                   " segment base references");
@@ -714,7 +709,7 @@ static void aout_out(int32_t segto, const void *data,
         aout_sect_write(s, mydata, 2L);
     } else if (type == OUT_REL4ADR) {
         if (segment == segto)
-            nasm_error(ERR_PANIC, "intra-segment OUT_REL4ADR");
+            nasm_panic(0, "intra-segment OUT_REL4ADR");
         if (segment != NO_SEG && segment % 2) {
             nasm_error(ERR_NONFATAL, "a.out format does not support"
                   " segment base references");
@@ -910,15 +905,16 @@ extern macros_t aout_stdmac[];
 
 #ifdef OF_AOUT
 
-struct ofmt of_aout = {
+const struct ofmt of_aout = {
     "Linux a.out object files",
     "aout",
     0,
+    32,
     null_debug_arr,
     &null_debug_form,
     aout_stdmac,
     aout_init,
-    null_setinfo,
+    nasm_do_legacy_output,
     aout_out,
     aout_deflabel,
     aout_section_names,
@@ -926,22 +922,24 @@ struct ofmt of_aout = {
     aout_segbase,
     null_directive,
     aout_filename,
-    aout_cleanup
+    aout_cleanup,
+    NULL                        /* pragma list */
 };
 
 #endif
 
 #ifdef OF_AOUTB
 
-struct ofmt of_aoutb = {
+const struct ofmt of_aoutb = {
     "NetBSD/FreeBSD a.out object files",
     "aoutb",
     0,
+    32,
     null_debug_arr,
     &null_debug_form,
     aout_stdmac,
     aoutb_init,
-    null_setinfo,
+    nasm_do_legacy_output,
     aout_out,
     aout_deflabel,
     aout_section_names,
@@ -949,7 +947,8 @@ struct ofmt of_aoutb = {
     aout_segbase,
     null_directive,
     aout_filename,
-    aout_cleanup
+    aout_cleanup,
+    NULL                        /* pragma list */
 };
 
 #endif

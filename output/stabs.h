@@ -35,7 +35,6 @@
 #define STABS_H_
 
 #include <ctype.h>
-#include <inttypes.h>
 
 #include "compiler.h"
 #include "nasmlib.h"
@@ -48,7 +47,7 @@ enum stab_offsets {
     STAB_otheroff   = 5,
     STAB_descoff    = 6,
     STAB_valoff     = 8,
-    STAB_stabsize   = 12,
+    STAB_stabsize   = 12
 };
 
 /* stab/non-stab types */
@@ -127,7 +126,7 @@ enum stab_types {
     N_NBBSS     = 0xf4,
     N_NBSTS     = 0xf6,
     N_NBLCS     = 0xf8,
-    N_LENG      = 0xfe,
+    N_LENG      = 0xfe
 };
 
 enum stab_source_file {
@@ -139,7 +138,7 @@ enum stab_source_file {
     N_SO_PASCAL     = 0x06,
     N_SO_FORTRAN90  = 0x07,
     N_SO_OBJC       = 0x32,
-    N_SO_OBJCPLUS   = 0x33,
+    N_SO_OBJCPLUS   = 0x33
 };
 
 #endif /* STABS_H_ */
