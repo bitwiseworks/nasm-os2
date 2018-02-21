@@ -2,6 +2,7 @@
 # UNIX Makefile for NASM documentation
 #
 
+top_srcdir	= ..
 srcdir		= .
 
 prefix		= /usr/local
@@ -16,88 +17,70 @@ INSTALL		= /bin/install -c
 INSTALL_PROGRAM	= ${INSTALL}
 INSTALL_DATA	= ${INSTALL} -m 644
 
-PERL		= perl
-MAKEINFO	= makeinfo
-TEXI2DVI        = texi2dvi
-TEXI2IPF	= texi2ipf
-IPFC		= ipfc
+PERL		= perl -I$(srcdir)
 
-ACRODIST	= false		# Acrobat Distiller
-PSTOPDF		= false		# BSD/MacOS X utility
-PS2PDF          = ps2pdf		# Part of GhostScript
+PDFOPT		= 
 
-SRCS		= nasmdoc.src inslist.src changes.src
-OUT		= info html nasmdoc.txt nasmdoc.ps nasmdoc.pdf
+RM_F		= rm -f
+RM_RF		= rm -rf
+CP_F		= cp -f
+CP_UF		= cp -ufv
 
-# exports
-export srcdir
-export PERL
+# Auxiliary files referenced by the HTML files
+HTMLAUX		= nasmdoc.css local.css nasmlogw.png
+
+SRCS		= nasmdoc.src inslist.src changes.src version.src
+OUT		= html nasmdoc.txt nasmdoc.pdf
+
+.SUFFIXES: .pfa .ph
 
 all: $(OUT)
 
-os2: nasm.inf
-
-inslist.src: inslist.pl ../insns.dat
-	$(PERL) $(srcdir)/inslist.pl
+inslist.src: inslist.pl ../x86/insns.dat
+	$(PERL) $(srcdir)/inslist.pl $(srcdir)/../x86/insns.dat
 
 .PHONY: html
-html: html/nasmdoc0.html
+html: $(HTMLAUX)
+	mkdir -p html
+	for f in $(HTMLAUX); do $(CP_UF) "$(srcdir)/$$f" html/; done
+	$(MAKE) html/nasmdoc0.html
+
+RDSRC = $(PERL) $(srcdir)/rdsrc.pl -I$(srcdir)/
 
 html/nasmdoc0.html: $(SRCS) rdsrc.pl
-	mkdir -p html
-	$(PERL) $(srcdir)/rdsrc.pl html < $<
-	mv -f *.html html
+	$(RM_F) html/*.html
+	$(RDSRC) -ohtml html nasmdoc.src
 
 nasmdoc.dip: $(SRCS) rdsrc.pl
-	$(PERL) $(srcdir)/rdsrc.pl dip < $<
-
-nasmdoc.texi: $(SRCS) rdsrc.pl
-	$(PERL) $(srcdir)/rdsrc.pl texi < $<
+	$(RDSRC) dip nasmdoc.src
 
 nasmdoc.txt: $(SRCS) rdsrc.pl
-	$(PERL) $(srcdir)/rdsrc.pl txt < $<
+	$(RDSRC) txt nasmdoc.src
 
-nasmdoc.ps: nasmdoc.dip nasmlogo.eps $(srcdir)/../version genpsdriver.pl \
-	    genps.pl psfonts.ph pswidth.ph head.ps
-	$(PERL) $(srcdir)/genpsdriver.pl > nasmdoc.ps
+version.src: $(top_srcdir)/version.pl $(top_srcdir)/version
+	$(PERL) $(top_srcdir)/version.pl docsrc \
+		< $(top_srcdir)/version > version.src
 
-nasmdoc.pdf: nasmdoc.ps
-	$(ACRODIST) -n -q --nosecurity -o $@ $< || \
-	$(PS2PDF) $< $@ || \
-	$(PSTOPDF) $< -o $@ 
+nasmdoc.ps: nasmdoc.dip genps.pl afmmetrics.ph ttfmetrics.ph \
+	pswidth.ph nasmlogo.eps psfonts.ph head.ps
+	$(PERL) $(srcdir)/genps.pl -epsdir "$(srcdir)" \
+		-headps $(srcdir)/head.ps nasmdoc.dip \
+		> nasmdoc.ps
 
-.PHONY: info
-info: info/nasm.info
-
-info/nasm.info: nasmdoc.texi
-	mkdir -p info
-	$(MAKEINFO) $<
-	mv -f *.info *.info-* info
-
-# DVI output from texinfo (optional)
-nasmdoc.dvi: nasmdoc.texi
-	$(TEXI2DVI) nasmdoc.texi
-
-# Rules for building an OS/2 book
-nasmdoc.ipf: nasmdoc.texi
-	$(TEXI2IPF) $< >$@
-
-nasm.inf: nasmdoc.ipf
-	$(IPFC) -i -s $< $@
+nasmdoc.pdf: nasmdoc.ps pspdf.pl
+	$(PERL) $(srcdir)/pspdf.pl $(PDFOPT) nasmdoc.ps nasmdoc.pdf
 
 clean:
-	-rm -f *.rtf *.hpj *.texi *.gid *.ipf *.dip
-	-rm -f *.aux *.cp *.fn *.ky *.pg *.log *.toc *.tp *.vr
-	-rm -f inslist.src
+	-$(RM_F) *.rtf *.hpj *.texi *.gid *.ipf *.dip
+	-$(RM_F) *.aux *.cp *.fn *.ky *.pg *.log *.toc *.tp *.vr
+	-$(RM_F) inslist.src version.src
+	-$(RM_F) nasmdoc*.ps
 
 spotless: clean
-	-rm -rf html info
-	-rm -f *.hlp nasmdoc.txt *.inf *.pdf *.dvi
-	-rm -f nasmdoc*.ps
+	-$(RM_RF) html info
+	-$(RM_F) *.hlp nasmdoc.txt *.inf *.pdf *.dvi
 
 install: all
-	mkdir -p $(INSTALLROOT)$(infodir)
-	$(INSTALL_DATA) info/* $(INSTALLROOT)$(infodir)
 	mkdir -p $(INSTALLROOT)$(docdir)/html
 	$(INSTALL_DATA) html/* $(INSTALLROOT)$(docdir)/html
-	$(INSTALL_DATA) nasmdoc.ps nasmdoc.pdf nasmdoc.txt $(INSTALLROOT)$(docdir)
+	$(INSTALL_DATA) nasmdoc.pdf nasmdoc.txt $(INSTALLROOT)$(docdir)

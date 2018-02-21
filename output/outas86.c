@@ -42,14 +42,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <inttypes.h>
 
 #include "nasm.h"
 #include "nasmlib.h"
+#include "error.h"
 #include "saa.h"
 #include "raa.h"
-#include "output/outform.h"
-#include "output/outlib.h"
+#include "outform.h"
+#include "outlib.h"
 
 #ifdef OF_AS86
 
@@ -138,11 +138,9 @@ static void as86_init(void)
     as86_add_string(as86_module);
 }
 
-static void as86_cleanup(int debuginfo)
+static void as86_cleanup(void)
 {
     struct Piece *p;
-
-    (void)debuginfo;
 
     as86_write();
     saa_free(stext.data);
@@ -170,11 +168,10 @@ static int32_t as86_section_names(char *name, int pass, int *bits)
     /*
      * Default is 16 bits.
      */
-    if (!name)
+    if (!name) {
         *bits = 16;
-
-    if (!name)
         return stext.index;
+    }
 
     if (!strcmp(name, ".text"))
         return stext.index;
@@ -330,6 +327,8 @@ static void as86_out(int32_t segto, const void *data,
         return;
     }
 
+    memset(mydata, 0, sizeof(mydata));
+
     if (type == OUT_RESERVE) {
         if (s) {
             nasm_error(ERR_WARNING, "uninitialized space declared in"
@@ -341,11 +340,11 @@ static void as86_out(int32_t segto, const void *data,
             bsslen += size;
     } else if (type == OUT_RAWDATA) {
         if (segment != NO_SEG)
-            nasm_error(ERR_PANIC, "OUT_RAWDATA with other than NO_SEG");
+            nasm_panic(0, "OUT_RAWDATA with other than NO_SEG");
         as86_sect_write(s, data, size);
         as86_add_piece(s, 0, 0L, 0L, size, 0);
     } else if (type == OUT_ADDRESS) {
-        int asize = abs(size);
+        int asize = abs((int)size);
         if (segment != NO_SEG) {
             if (segment % 2) {
                 nasm_error(ERR_NONFATAL, "as86 format does not support"
@@ -362,7 +361,7 @@ static void as86_out(int32_t segto, const void *data,
         }
     } else if (type == OUT_REL2ADR) {
         if (segment == segto)
-            nasm_error(ERR_PANIC, "intra-segment OUT_REL2ADR");
+            nasm_panic(0, "intra-segment OUT_REL2ADR");
         if (segment != NO_SEG) {
             if (segment % 2) {
                 nasm_error(ERR_NONFATAL, "as86 format does not support"
@@ -375,7 +374,7 @@ static void as86_out(int32_t segto, const void *data,
         }
     } else if (type == OUT_REL4ADR) {
         if (segment == segto)
-            nasm_error(ERR_PANIC, "intra-segment OUT_REL4ADR");
+            nasm_panic(0, "intra-segment OUT_REL4ADR");
         if (segment != NO_SEG) {
             if (segment % 2) {
                 nasm_error(ERR_NONFATAL, "as86 format does not support"
@@ -516,7 +515,7 @@ static void as86_set_rsize(int size)
             fputc(0x03, ofile);
             break;
         default:
-            nasm_error(ERR_PANIC, "bizarre relocation size %d", size);
+            nasm_panic(0, "bizarre relocation size %d", size);
 	    break;
         }
     }
@@ -583,7 +582,7 @@ static void as86_write_section(struct Section *sect, int index)
                 fwriteint16_t(p->number, ofile);
             else
                 fputc(p->number, ofile);
-            switch ((int)s) {
+            switch (s) {
             case 0:
                 break;
             case 1:
@@ -627,15 +626,16 @@ static void as86_filename(char *inname, char *outname)
 
 extern macros_t as86_stdmac[];
 
-struct ofmt of_as86 = {
+const struct ofmt of_as86 = {
     "Linux as86 (bin86 version 0.3) object files",
     "as86",
     0,
+    32,
     null_debug_arr,
     &null_debug_form,
     as86_stdmac,
     as86_init,
-    null_setinfo,
+    nasm_do_legacy_output,
     as86_out,
     as86_deflabel,
     as86_section_names,
@@ -643,7 +643,8 @@ struct ofmt of_as86 = {
     as86_segbase,
     null_directive,
     as86_filename,
-    as86_cleanup
+    as86_cleanup,
+    NULL                        /* pragma list */
 };
 
 #endif                          /* OF_AS86 */

@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------- *
- *   
- *   Copyright 1996-2014 The NASM Authors - All Rights Reserved
+ *
+ *   Copyright 1996-2017 The NASM Authors - All Rights Reserved
  *   See the file AUTHORS included with the NASM distribution for
  *   the specific copyright holders.
  *
@@ -14,7 +14,7 @@
  *     copyright notice, this list of conditions and the following
  *     disclaimer in the documentation and/or other materials provided
  *     with the distribution.
- *     
+ *
  *     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
  *     CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
  *     INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
@@ -42,15 +42,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <inttypes.h>
 #include <limits.h>
 
 #include "nasm.h"
 #include "nasmlib.h"
+#include "error.h"
 #include "stdscan.h"
 #include "eval.h"
-#include "output/outform.h"
-#include "output/outlib.h"
+#include "ver.h"
+
+#include "outform.h"
+#include "outlib.h"
 
 #ifdef OF_OBJ
 
@@ -146,13 +148,15 @@ enum RecordID {                 /* record ID codes */
 };
 
 enum ComentID {                 /* ID codes for comment records */
-
-    dEXTENDED = 0xA1,           /* tells that we are using translator-specific extensions */
-    dLINKPASS = 0xA2,           /* link pass 2 marker */
-    dTYPEDEF = 0xE3,            /* define a type */
-    dSYM = 0xE6,                /* symbol debug record */
-    dFILNAME = 0xE8,            /* file name record */
-    dCOMPDEF = 0xEA             /* compiler type info */
+    dTRANSL   = 0x0000,         /* translator comment */
+    dOMFEXT   = 0xC0A0,         /* "OMF extension" */
+    dEXTENDED = 0xC0A1,         /* translator-specific extensions */
+    dLINKPASS = 0x40A2,         /* link pass 2 marker */
+    dTYPEDEF  = 0xC0E3,         /* define a type */
+    dSYM      = 0xC0E6,         /* symbol debug record */
+    dFILNAME  = 0xC0E8,         /* file name record */
+    dDEPFILE  = 0xC0E9,         /* dependency file */
+    dCOMPDEF  = 0xC0EA          /* compiler type info */
 };
 
 typedef struct ObjRecord ObjRecord;
@@ -179,6 +183,7 @@ static ObjRecord *obj_commit(ObjRecord * orp);
 
 static bool obj_uppercase;       /* Flag: all names in uppercase */
 static bool obj_use32;           /* Flag: at least one segment is 32-bit */
+static bool obj_nodepend;        /* Flag: don't emit file dependencies */
 
 /*
  * Clear an ObjRecord structure.  (Never reallocates).
@@ -481,8 +486,7 @@ static void ori_linnum(ObjRecord * orp)
  */
 static void ori_local(ObjRecord * orp)
 {
-    obj_byte(orp, 0x40);
-    obj_byte(orp, dSYM);
+    obj_rword(orp, dSYM);
 }
 
 /*
@@ -624,14 +628,15 @@ static struct ExpDef {
 
 static int32_t obj_entry_seg, obj_entry_ofs;
 
-struct ofmt of_obj;
+const struct ofmt of_obj;
+static const struct dfmt borland_debug_form;
 
 /* The current segment */
 static struct Segment *current_seg;
 
 static int32_t obj_segment(char *, int, int *);
-static void obj_write_file(int debuginfo);
-static int obj_directive(enum directives, char *, int);
+static void obj_write_file(void);
+static enum directive_result obj_directive(enum directive, char *, int);
 
 static void obj_init(void)
 {
@@ -660,17 +665,10 @@ static void obj_init(void)
     current_seg = NULL;
 }
 
-static int obj_set_info(enum geninfo type, char **val)
+static void obj_cleanup(void)
 {
-    (void)type;
-    (void)val;
-
-    return 0;
-}
-static void obj_cleanup(int debuginfo)
-{
-    obj_write_file(debuginfo);
-    of_obj.current_dfmt->cleanup();
+    obj_write_file();
+    dfmt->cleanup();
     while (seghead) {
         struct Segment *segtmp = seghead;
         seghead = seghead->next;
@@ -840,7 +838,7 @@ static void obj_deflabel(char *name, int32_t segment,
     if (!any_segs && segment == first_seg) {
         int tempint;            /* ignored */
         if (segment != obj_segment("__NASMDEFSEG", 2, &tempint))
-            nasm_error(ERR_PANIC, "strange segment conditions in OBJ driver");
+            nasm_panic(0, "strange segment conditions in OBJ driver");
     }
 
     for (seg = seghead; seg && is_global; seg = seg->next)
@@ -969,7 +967,7 @@ static void obj_deflabel(char *name, int32_t segment,
                 stdscan_reset();
                 stdscan_set(special);
                 tokval.t_type = TOKEN_INVALID;
-                e = evaluate(stdscan, NULL, &tokval, NULL, 1, nasm_error, NULL);
+                e = evaluate(stdscan, NULL, &tokval, NULL, 1, NULL);
                 if (e) {
                     if (!is_simple(e))
                         nasm_error(ERR_NONFATAL, "cannot use relocatable"
@@ -1046,7 +1044,7 @@ static void obj_out(int32_t segto, const void *data,
     if (!any_segs) {
         int tempint;            /* ignored */
         if (segto != obj_segment("__NASMDEFSEG", 2, &tempint))
-            nasm_error(ERR_PANIC, "strange segment conditions in OBJ driver");
+            nasm_panic(0, "strange segment conditions in OBJ driver");
     }
 
     /*
@@ -1056,7 +1054,7 @@ static void obj_out(int32_t segto, const void *data,
         if (seg->index == segto)
             break;
     if (!seg)
-        nasm_error(ERR_PANIC, "code directed to nonexistent segment?");
+        nasm_panic(0, "code directed to nonexistent segment?");
 
     orp = seg->orp;
     orp->parm[0] = seg->currentpos;
@@ -1087,7 +1085,7 @@ static void obj_out(int32_t segto, const void *data,
         int rsize;
 
         if (type == OUT_ADDRESS)
-            size = abs(size);
+            size = abs((int)size);
 
         if (segment == NO_SEG && type != OUT_ADDRESS)
             nasm_error(ERR_NONFATAL, "relative call to absolute address not"
@@ -1098,15 +1096,46 @@ static void obj_out(int32_t segto, const void *data,
 
         ldata = *(int64_t *)data;
         if (type != OUT_ADDRESS) {
-            ldata += size;
-	    size = realsize(type, size);
+	    /*
+	     * For 16-bit and 32-bit x86 code, the size and realsize() always
+	     * matches as only jumps, calls and loops uses PC relative
+	     * addressing and the address isn't followed by any other opcode
+	     * bytes.  In 64-bit mode there is RIP relative addressing which
+	     * means the fixup location can be followed by an immediate value,
+	     * meaning that size > realsize().
+	     *
+	     * When the CPU is calculating the effective address, it takes the
+	     * RIP at the end of the instruction and adds the fixed up relative
+	     * address value to it.
+	     *
+	     * The linker's point of reference is the end of the fixup location
+	     * (which is the end of the instruction for Jcc, CALL, LOOP[cc]).
+	     * It is calculating distance between the target symbol and the end
+	     * of the fixup location, and add this to the displacement value we
+	     * are calculating here and storing at the fixup location.
+	     *
+	     * To get the right effect, we need to _reduce_ the displacement
+	     * value by the number of bytes following the fixup.
+	     *
+	     * Example:
+	     *  data at address 0x100; REL4ADR at 0x050, 4 byte immediate,
+	     *  end of fixup at 0x054, end of instruction at 0x058.
+	     *  => size = 8.
+	     *  => realsize() -> 4
+	     *  => CPU needs a value of:   0x100 - 0x058 = 0x0a8
+	     *  => linker/loader will add: 0x100 - 0x054 = 0x0ac
+	     *  => We must add an addend of -4.
+	     *  => realsize() - size = -4.
+	     *
+	     * The code used to do size - realsize() at least since v0.90,
+	     * probably because it wasn't needed...
+	     */
 	    ldata -= size;
+	    size = realsize(type, size);
+	    ldata += size;
         }
 
-	if (size > UINT_MAX)
-	    size = 0;
-
-	switch ((unsigned int)size) {
+	switch (size) {
 	default:
 	    nasm_error(ERR_NONFATAL, "OBJ format can only handle 16- or "
 		       "32-byte relocations");
@@ -1193,7 +1222,7 @@ static void obj_write_fixup(ObjRecord * orp, int bytes,
         locat = FIX_16_SELECTOR;
         seg--;
         if (bytes != 2)
-            nasm_error(ERR_PANIC, "OBJ: 4-byte segment base fixup got"
+            nasm_panic(0, "OBJ: 4-byte segment base fixup got"
                   " through sanity check");
     } else {
         base = false;
@@ -1239,7 +1268,7 @@ static void obj_write_fixup(ObjRecord * orp, int bytes,
             if (eb)
                 method = 6, e = eb->exts[i], tidx = e->index;
             else
-                nasm_error(ERR_PANIC,
+                nasm_panic(0,
                       "unrecognised segment value in obj_write_fixup");
         }
     }
@@ -1298,7 +1327,7 @@ static void obj_write_fixup(ObjRecord * orp, int bytes,
                 if (eb)
                     method |= 0x20, fidx = eb->exts[i]->index;
                 else
-                    nasm_error(ERR_PANIC,
+                    nasm_panic(0,
                           "unrecognised WRT value in obj_write_fixup");
             }
         }
@@ -1447,7 +1476,7 @@ static int32_t obj_segment(char *name, int pass, int *bits)
                         if (!strcmp(grp->name, "FLAT"))
                             break;
                     if (!grp)
-                        nasm_error(ERR_PANIC, "failure to define FLAT?!");
+                        nasm_panic(0, "failure to define FLAT?!");
                 }
                 seg->grp = grp;
             } else if (!nasm_strnicmp(p, "class=", 6))
@@ -1461,7 +1490,7 @@ static int32_t obj_segment(char *name, int pass, int *bits)
                     nasm_error(ERR_NONFATAL, "segment alignment should be"
                           " numeric");
                 }
-                switch ((int)seg->align) {
+                switch (seg->align) {
                 case 1:        /* BYTE */
                 case 2:        /* WORD */
                 case 4:        /* DWORD */
@@ -1563,7 +1592,8 @@ static int32_t obj_segment(char *name, int pass, int *bits)
     }
 }
 
-static int obj_directive(enum directives directive, char *value, int pass)
+static enum directive_result
+obj_directive(enum directive directive, char *value, int pass)
 {
     switch (directive) {
     case D_GROUP:
@@ -1594,7 +1624,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
              *
              * if (!*q) {
              *     nasm_error(ERR_NONFATAL,"GROUP directive contains no segments");
-             *     return 1;
+             *     return DIRR_ERROR;
              * }
              */
 
@@ -1603,7 +1633,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
                 obj_idx++;
                 if (!strcmp(grp->name, v)) {
                     nasm_error(ERR_NONFATAL, "group `%s' defined twice", v);
-                    return 1;
+                    return DIRR_ERROR;
                 }
             }
 
@@ -1674,11 +1704,11 @@ static int obj_directive(enum directives directive, char *value, int pass)
                     extp = &(*extp)->next_dws;
             }
         }
-        return 1;
+        return DIRR_OK;
     }
     case D_UPPERCASE:
         obj_uppercase = true;
-        return 1;
+        return DIRR_OK;
 
     case D_IMPORT:
     {
@@ -1725,7 +1755,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
                 imp->impname = NULL;
         }
 
-        return 1;
+        return DIRR_OK;
     }
     case D_EXPORT:
     {
@@ -1735,7 +1765,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
         unsigned int ordinal = 0;
 
         if (pass == 2)
-            return 1;           /* ignore in pass two */
+            return DIRR_OK;     /* ignore in pass two */
         intname = q = value;
         while (*q && !nasm_isspace(*q))
             q++;
@@ -1756,7 +1786,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
 
         if (!*intname) {
             nasm_error(ERR_NONFATAL, "`export' directive requires export name");
-            return 1;
+            return DIRR_OK;
         }
         if (!*extname) {
             extname = intname;
@@ -1781,7 +1811,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
                 if (err) {
                     nasm_error(ERR_NONFATAL,
                           "value `%s' for `parm' is non-numeric", v + 5);
-                    return 1;
+                    return DIRR_ERROR;
                 }
             } else {
                 bool err = false;
@@ -1789,7 +1819,7 @@ static int obj_directive(enum directives directive, char *value, int pass)
                 if (err) {
                     nasm_error(ERR_NONFATAL,
                           "unrecognised export qualifier `%s'", v);
-                    return 1;
+                    return DIRR_ERROR;
                 }
                 flags |= EXPDEF_FLAG_ORDINAL;
             }
@@ -1803,10 +1833,10 @@ static int obj_directive(enum directives directive, char *value, int pass)
         export->ordinal = ordinal;
         export->flags = flags;
 
-        return 1;
+        return DIRR_OK;
     }
     default:
-	return 0;
+	return DIRR_UNKNOWN;
     }
 }
 
@@ -1916,7 +1946,32 @@ static void obj_filename(char *inname, char *outname)
     standard_extension(inname, outname, ".obj");
 }
 
-static void obj_write_file(int debuginfo)
+/* Get a file timestamp in MS-DOS format */
+static uint32_t obj_file_timestamp(const char *pathname)
+{
+    time_t t;
+    const struct tm *lt;
+
+    if (!nasm_file_time(&t, pathname))
+        return 0;
+
+    lt = localtime(&t);
+    if (!lt)
+        return 0;
+
+    if (lt->tm_year < 80 || lt->tm_year > 207)
+        return 0;               /* Only years 1980-2107 representable */
+
+    return
+        ((uint32_t)lt->tm_sec >> 1) +
+        ((uint32_t)lt->tm_min << 5) +
+        ((uint32_t)lt->tm_hour << 11) +
+        ((uint32_t)lt->tm_mday << 16) +
+        (((uint32_t)lt->tm_mon + 1) << 21) +
+        (((uint32_t)lt->tm_year - 80) << 25);
+}
+
+static void obj_write_file(void)
 {
     struct Segment *seg, *entry_seg_ptr = 0;
     struct FileName *fn;
@@ -1928,6 +1983,8 @@ static void obj_write_file(int debuginfo)
     struct ExpDef *export;
     int lname_idx;
     ObjRecord *orp;
+    const StrList *depfile;
+    const bool debuginfo = (dfmt == &borland_debug_form);
 
     /*
      * Write the THEADR module header.
@@ -1941,16 +1998,34 @@ static void obj_write_file(int debuginfo)
      * Write the NASM boast comment.
      */
     orp->type = COMENT;
-    obj_rword(orp, 0);          /* comment type zero */
+    obj_rword(orp, dTRANSL);
     obj_name(orp, nasm_comment);
     obj_emit2(orp);
+
+    /*
+     * Output file dependency information
+     */
+    if (!obj_nodepend) {
+        list_for_each(depfile, depend_list) {
+            uint32_t ts;
+
+            ts = obj_file_timestamp(depfile->str);
+            if (ts) {
+                orp->type = COMENT;
+                obj_rword(orp, dDEPFILE);
+                obj_dword(orp, ts);
+                obj_name(orp, depfile->str);
+                obj_emit2(orp);
+            }
+        }
+    }
 
     orp->type = COMENT;
     /*
      * Write the IMPDEF records, if any.
      */
     for (imp = imphead; imp; imp = imp->next) {
-        obj_rword(orp, 0xA0);   /* comment class A0 */
+        obj_rword(orp, dOMFEXT);
         obj_byte(orp, 1);       /* subfunction 1: IMPDEF */
         if (imp->impname)
             obj_byte(orp, 0);   /* import by name */
@@ -1969,7 +2044,7 @@ static void obj_write_file(int debuginfo)
      * Write the EXPDEF records, if any.
      */
     for (export = exphead; export; export = export->next) {
-        obj_rword(orp, 0xA0);   /* comment class A0 */
+        obj_rword(orp, dOMFEXT);
         obj_byte(orp, 2);       /* subfunction 2: EXPDEF */
         obj_byte(orp, export->flags);
         obj_name(orp, export->extname);
@@ -1982,8 +2057,7 @@ static void obj_write_file(int debuginfo)
     /* we're using extended OMF if we put in debug info */
     if (debuginfo) {
         orp->type = COMENT;
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dEXTENDED);
+        obj_rword(orp, dEXTENDED);
         obj_emit2(orp);
     }
 
@@ -2159,8 +2233,7 @@ static void obj_write_file(int debuginfo)
      */
     if (debuginfo || obj_entry_seg == NO_SEG) {
         orp->type = COMENT;
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dLINKPASS);
+        obj_rword(orp, dLINKPASS);
         obj_byte(orp, 1);
         obj_emit2(orp);
     }
@@ -2173,34 +2246,29 @@ static void obj_write_file(int debuginfo)
         int i;
         struct Array *arrtmp = arrhead;
         orp->type = COMENT;
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dCOMPDEF);
+        obj_rword(orp, dCOMPDEF);
         obj_byte(orp, 4);
         obj_byte(orp, 0);
         obj_emit2(orp);
 
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x18);    /* type # for linking */
         obj_word(orp, 6);       /* size of type */
         obj_byte(orp, 0x2a);    /* absolute type for debugging */
         obj_emit2(orp);
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x19);    /* type # for linking */
         obj_word(orp, 0);       /* size of type */
         obj_byte(orp, 0x24);    /* absolute type for debugging */
         obj_byte(orp, 0);       /* near/far specifier */
         obj_emit2(orp);
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x1A);    /* type # for linking */
         obj_word(orp, 0);       /* size of type */
         obj_byte(orp, 0x24);    /* absolute type for debugging */
         obj_byte(orp, 1);       /* near/far specifier */
         obj_emit2(orp);
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x1b);    /* type # for linking */
         obj_word(orp, 0);       /* size of type */
         obj_byte(orp, 0x23);    /* absolute type for debugging */
@@ -2208,8 +2276,7 @@ static void obj_write_file(int debuginfo)
         obj_byte(orp, 0);
         obj_byte(orp, 0);
         obj_emit2(orp);
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x1c);    /* type # for linking */
         obj_word(orp, 0);       /* size of type */
         obj_byte(orp, 0x23);    /* absolute type for debugging */
@@ -2217,8 +2284,7 @@ static void obj_write_file(int debuginfo)
         obj_byte(orp, 4);
         obj_byte(orp, 0);
         obj_emit2(orp);
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x1d);    /* type # for linking */
         obj_word(orp, 0);       /* size of type */
         obj_byte(orp, 0x23);    /* absolute type for debugging */
@@ -2226,8 +2292,7 @@ static void obj_write_file(int debuginfo)
         obj_byte(orp, 1);
         obj_byte(orp, 0);
         obj_emit2(orp);
-        obj_byte(orp, 0x40);
-        obj_byte(orp, dTYPEDEF);
+        obj_rword(orp, dTYPEDEF);
         obj_word(orp, 0x1e);    /* type # for linking */
         obj_word(orp, 0);       /* size of type */
         obj_byte(orp, 0x23);    /* absolute type for debugging */
@@ -2238,8 +2303,7 @@ static void obj_write_file(int debuginfo)
 
         /* put out the array types */
         for (i = ARRAYBOT; i < arrindex; i++) {
-            obj_byte(orp, 0x40);
-            obj_byte(orp, dTYPEDEF);
+            obj_rword(orp, dTYPEDEF);
             obj_word(orp, i);   /* type # for linking */
             obj_word(orp, arrtmp->size);        /* size of type */
             obj_byte(orp, 0x1A);        /* absolute type for debugging (array) */
@@ -2262,8 +2326,7 @@ static void obj_write_file(int debuginfo)
             /* write out current file name */
             orp->type = COMENT;
             orp->ori = ori_null;
-            obj_byte(orp, 0x40);
-            obj_byte(orp, dFILNAME);
+            obj_rword(orp, dFILNAME);
             obj_byte(orp, 0);
             obj_name(orp, fn->name);
             obj_dword(orp, 0);
@@ -2402,6 +2465,21 @@ static void obj_fwrite(ObjRecord * orp)
     fputc((-cksum) & 0xFF, ofile);
 }
 
+static enum directive_result
+obj_pragma(const struct pragma *pragma)
+{
+    switch (pragma->opcode) {
+    case D_NODEPEND:
+        obj_nodepend = true;
+        break;
+
+    default:
+        break;
+    }
+
+    return DIRR_OK;
+}
+
 extern macros_t obj_stdmac[];
 
 static void dbgbi_init(void)
@@ -2457,7 +2535,7 @@ static void dbgbi_linnum(const char *lnfname, int32_t lineno, int32_t segto)
     if (!any_segs) {
         int tempint;            /* ignored */
         if (segto != obj_segment("__NASMDEFSEG", 2, &tempint))
-            nasm_error(ERR_PANIC, "strange segment conditions in OBJ driver");
+            nasm_panic(0, "strange segment conditions in OBJ driver");
     }
 
     /*
@@ -2467,7 +2545,7 @@ static void dbgbi_linnum(const char *lnfname, int32_t lineno, int32_t segto)
         if (seg->index == segto)
             break;
     if (!seg)
-        nasm_error(ERR_PANIC, "lineno directed to nonexistent segment?");
+        nasm_panic(0, "lineno directed to nonexistent segment?");
 
 /*    for (fn = fnhead; fn; fn = fnhead->next) */
     for (fn = fnhead; fn; fn = fn->next)        /* fbk - Austin Lunnen - John Fine */
@@ -2500,18 +2578,14 @@ static void dbgbi_deflabel(char *name, int32_t segment,
     (void)special;
 
     /*
+     * Note: ..[^@] special symbols are filtered in labels.c
+     */
+
+    /*
      * If it's a special-retry from pass two, discard it.
      */
     if (is_global == 3)
         return;
-
-    /*
-     * First check for the double-period, signifying something
-     * unusual.
-     */
-    if (name[0] == '.' && name[1] == '.' && name[2] != '@') {
-        return;
-    }
 
     /*
      * Case (i):
@@ -2583,7 +2657,7 @@ static void dbgbi_typevalue(int32_t type)
         vsize = 10;
         break;
     default:
-        last_defined->type = 0x19;      /*label */
+        last_defined->type = 0x19;      /* label */
         vsize = 0;
         break;
     }
@@ -2605,7 +2679,7 @@ static void dbgbi_output(int output_type, void *param)
     (void)output_type;
     (void)param;
 }
-static struct dfmt borland_debug_form = {
+static const struct dfmt borland_debug_form = {
     "Borland Debug Records",
     "borland",
     dbgbi_init,
@@ -2615,23 +2689,29 @@ static struct dfmt borland_debug_form = {
     dbgbi_typevalue,
     dbgbi_output,
     dbgbi_cleanup,
+    NULL                        /* pragma list */
 };
 
-static struct dfmt *borland_debug_arr[3] = {
+static const struct dfmt * const borland_debug_arr[3] = {
     &borland_debug_form,
     &null_debug_form,
     NULL
 };
 
-struct ofmt of_obj = {
+static const struct pragma_facility obj_pragma_list[] = {
+    { NULL, obj_pragma }
+};
+
+const struct ofmt of_obj = {
     "MS-DOS 16-bit/32-bit OMF object files",
     "obj",
     0,
+    32,
     borland_debug_arr,
     &borland_debug_form,
     obj_stdmac,
     obj_init,
-    obj_set_info,
+    nasm_do_legacy_output,
     obj_out,
     obj_deflabel,
     obj_segment,
@@ -2639,6 +2719,7 @@ struct ofmt of_obj = {
     obj_segbase,
     obj_directive,
     obj_filename,
-    obj_cleanup
+    obj_cleanup,
+    obj_pragma_list
 };
 #endif                          /* OF_OBJ */
