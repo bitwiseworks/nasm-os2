@@ -1,0 +1,5 @@
+configure
+doc/Makefile
+macros/macros.c
+config/config.h.in
+config/config.h.in~
