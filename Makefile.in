@@ -216,7 +216,7 @@ nsis/version.nsh: version version.pl
 # standard distribution.
 macros/macros.c: macros/macros.pl asm/pptok.ph version.mac \
 	$(srcdir)/macros/*.mac $(srcdir)/output/*.mac
-	$(RUNPERL) $(srcdir)/macros/macros.pl version.mac \
+	$(RUNPERL) $(srcdir)/macros/macros.pl $(srcdir)/version.mac \
 		$(srcdir)/macros/*.mac $(srcdir)/output/*.mac
 
 # These source files are generated from regs.dat by yet another
