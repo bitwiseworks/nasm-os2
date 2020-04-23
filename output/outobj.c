@@ -640,6 +640,7 @@ static enum directive_result obj_directive(enum directive, char *, int);
 
 static void obj_init(void)
 {
+    strlcpy(obj_infile, inname, sizeof(obj_infile));
     first_seg = seg_alloc();
     any_segs = false;
     fpubhead = NULL;
@@ -1391,9 +1392,10 @@ static int32_t obj_segment(char *name, int pass, int *bits)
             attrs++;
         }
 
-        obj_idx = 1;
-        for (seg = seghead; seg; seg = seg->next) {
-            obj_idx++;
+        for (seg = seghead, obj_idx = 1; ; seg = seg->next, obj_idx++) {
+            if (!seg)
+                break;
+
             if (!strcmp(seg->name, name)) {
                 if (attrs > 0 && pass == 1)
                     nasm_error(ERR_WARNING, "segment attributes specified on"
@@ -1414,7 +1416,7 @@ static int32_t obj_segment(char *name, int pass, int *bits)
         seg->obj_index = obj_idx;
         seg->grp = NULL;
         any_segs = true;
-        seg->name = NULL;
+        seg->name = nasm_strdup(name);
         seg->currentpos = 0;
         seg->align = 1;         /* default */
         seg->use32 = false;     /* default */
@@ -1539,11 +1541,9 @@ static int32_t obj_segment(char *name, int pass, int *bits)
 
         obj_seg_needs_update = seg;
         if (seg->align >= SEG_ABS)
-            define_label(name, NO_SEG, seg->align - SEG_ABS,
-			 NULL, false, false);
+            define_label(name, NO_SEG, seg->align - SEG_ABS, false);
         else
-            define_label(name, seg->index + 1, 0L,
-			 NULL, false, false);
+            define_label(name, seg->index + 1, 0L, false);
         obj_seg_needs_update = NULL;
 
         /*
@@ -1646,7 +1646,7 @@ obj_directive(enum directive directive, char *value, int pass)
             grp->name = NULL;
 
             obj_grp_needs_update = grp;
-            define_label(v, grp->index + 1, 0L, NULL, false, false);
+            backend_label(v, grp->index + 1, 0L);
             obj_grp_needs_update = NULL;
 
             while (*q) {
@@ -1912,8 +1912,8 @@ static int32_t obj_segbase(int32_t segment)
         if (eb) {
             e = eb->exts[i];
 	    if (!e) {
-		nasm_assert(pass0 == 0);
-		/* Not available - can happen during optimization */
+                /* Not available yet, probably a forward reference */
+		nasm_assert(pass0 < 2); /* Convergence failure */
 		return NO_SEG;
 	    }
 
@@ -1938,12 +1938,6 @@ static int32_t obj_segbase(int32_t segment)
         return seg->grp->index + 1;     /* grouped segment */
 
     return segment;             /* no special treatment */
-}
-
-static void obj_filename(char *inname, char *outname)
-{
-    strcpy(obj_infile, inname);
-    standard_extension(inname, outname, ".obj");
 }
 
 /* Get a file timestamp in MS-DOS format */
@@ -2705,20 +2699,22 @@ static const struct pragma_facility obj_pragma_list[] = {
 const struct ofmt of_obj = {
     "MS-DOS 16-bit/32-bit OMF object files",
     "obj",
+    ".obj",
     0,
     32,
     borland_debug_arr,
     &borland_debug_form,
     obj_stdmac,
     obj_init,
+    null_reset,
     nasm_do_legacy_output,
     obj_out,
     obj_deflabel,
     obj_segment,
+    NULL,
     obj_sectalign,
     obj_segbase,
     obj_directive,
-    obj_filename,
     obj_cleanup,
     obj_pragma_list
 };

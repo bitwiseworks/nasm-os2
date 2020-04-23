@@ -65,11 +65,19 @@
 #define IF_AVX512VBMI        74 /* AVX-512 VBMI instructions                                        */
 #define IF_AES               75 /* AES instructions                                                 */
 #define IF_VAES              76 /* AES AVX instructions                                             */
-#define IF_VPCLMULQDQ        77 /* Carry-Less Multiplication extention                              */
-#define IF_OBSOLETE          78 /* Instruction removed from architecture                            */
-#define IF_VEX               79 /* VEX or XOP encoded instruction                                   */
-#define IF_EVEX              80 /* EVEX encoded instruction                                         */
-                                /* 81...95 unused                                                   */
+#define IF_VPCLMULQDQ        77 /* AVX Carryless Multiplication                                     */
+#define IF_GFNI              78 /* Galois Field instructions                                        */
+#define IF_AVX512VBMI2       79 /* AVX-512 VBMI2 instructions                                       */
+#define IF_AVX512VNNI        80 /* AVX-512 VNNI instructions                                        */
+#define IF_AVX512BITALG      81 /* AVX-512 Bit Algorithm instructions                               */
+#define IF_AVX512VPOPCNTDQ   82 /* AVX-512 VPOPCNTD/VPOPCNTQ                                        */
+#define IF_AVX5124FMAPS      83 /* AVX-512 4-iteration multiply-add                                 */
+#define IF_AVX5124VNNIW      84 /* AVX-512 4-iteration dot product                                  */
+#define IF_SGX               85 /* Intel Software Guard Extensions (SGX)                            */
+#define IF_OBSOLETE          86 /* Instruction removed from architecture                            */
+#define IF_VEX               87 /* VEX or XOP encoded instruction                                   */
+#define IF_EVEX              88 /* EVEX encoded instruction                                         */
+                                /* 89...95 unused                                                   */
 #define IF_8086              96 /* 8086                                                             */
 #define IF_186               97 /* 186+                                                             */
 #define IF_286               98 /* 286+                                                             */
@@ -94,6 +102,6 @@ typedef struct {
     uint32_t field[IF_FIELD_COUNT];
 } iflag_t;
 
-extern const iflag_t insns_flags[242];
+extern const iflag_t insns_flags[265];
 
 #endif /* NASM_IFLAGGEN_H */
