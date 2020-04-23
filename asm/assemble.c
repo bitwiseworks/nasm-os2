@@ -208,6 +208,8 @@ enum match_result {
     MERR_ENCMISMATCH,
     MERR_BADBND,
     MERR_BADREPNE,
+    MERR_REGSETSIZE,
+    MERR_REGSET,
     /*
      * Matching success; the conditional ones first
      */
@@ -292,7 +294,7 @@ static const char *size_name(int size)
 
 static void warn_overflow(int size)
 {
-    nasm_error(ERR_WARNING | ERR_PASS2 | ERR_WARN_NOV,
+    nasm_error(ERR_WARNING | ERR_PASS2 | WARN_NOV,
             "%s data exceeds bounds", size_name(size));
 }
 
@@ -335,13 +337,12 @@ static void out(struct out_data *data)
 {
     static int32_t lineno = 0;     /* static!!! */
     static const char *lnfname = NULL;
-    int asize;
-    const int amax  = ofmt->maxbits >> 3; /* Maximum address size in bytes */
     union {
         uint8_t b[8];
         uint64_t q;
     } xdata;
-    uint64_t size = data->size;
+    size_t asize, amax;
+    uint64_t zeropad = 0;
     int64_t addrval;
     int32_t fixseg;             /* Segment for which to produce fixed data */
 
@@ -364,26 +365,29 @@ static void out(struct out_data *data)
         goto address;
 
     address:
+        nasm_assert(data->size <= 8);
         asize = data->size;
-        nasm_assert(asize <= 8);
-        if (data->tsegment == fixseg && data->twrt == NO_SEG) {
-            uint8_t *q = xdata.b;
-
+        amax = ofmt->maxbits >> 3; /* Maximum address size in bytes */
+        if ((ofmt->flags & OFMT_KEEP_ADDR) == 0 && data->tsegment == fixseg &&
+            data->twrt == NO_SEG) {
             warn_overflow_out(addrval, asize, data->sign);
-
-            WRITEADDR(q, addrval, asize);
+            xdata.q = cpu_to_le64(addrval);
             data->data = xdata.b;
             data->type = OUT_RAWDATA;
-            asize = 0;              /* No longer an address */
+            asize = amax = 0;   /* No longer an address */
         }
         break;
 
+    case OUT_SEGMENT:
+        nasm_assert(data->size <= 8);
+        asize = data->size;
+        amax = 2;
+        break;
+
     default:
-        asize = 0;              /* Not an address */
+        asize = amax = 0;       /* Not an address */
         break;
     }
-
-    lfmt->output(data);
 
     /*
      * this call to src_get determines when we call the
@@ -397,28 +401,35 @@ static void out(struct out_data *data)
     if (src_get(&lineno, &lnfname))
         dfmt->linenum(lnfname, lineno, data->segment);
 
-    if (asize && asize > amax) {
-        if (data->type != OUT_ADDRESS || data->sign == OUT_SIGNED) {
+    if (asize > amax) {
+        if (data->type == OUT_RELADDR || data->sign == OUT_SIGNED) {
             nasm_error(ERR_NONFATAL,
-                    "%d-bit signed relocation unsupported by output format %s\n",
-                    asize << 3, ofmt->shortname);
+                    "%u-bit signed relocation unsupported by output format %s",
+                       (unsigned int)(asize << 3), ofmt->shortname);
         } else {
-            nasm_error(ERR_WARNING | ERR_WARN_ZEXTRELOC,
-                    "%d-bit unsigned relocation zero-extended from %d bits\n",
-                    asize << 3, ofmt->maxbits);
-            data->size = amax;
-            ofmt->output(data);
-            data->insoffs += amax;
-            data->offset += amax;
-            data->size = size = asize - amax;
+            nasm_error(ERR_WARNING | WARN_ZEXTRELOC,
+                       "%u-bit %s relocation zero-extended from %u bits",
+                       (unsigned int)(asize << 3),
+                       data->type == OUT_SEGMENT ? "segment" : "unsigned",
+                       (unsigned int)(amax << 3));
         }
-        data->data = zero_buffer;
-        data->type = OUT_RAWDATA;
+        zeropad = data->size - amax;
+        data->size = amax;
     }
-
+    lfmt->output(data);
     ofmt->output(data);
-    data->offset += size;
-    data->insoffs += size;
+    data->offset  += data->size;
+    data->insoffs += data->size;
+
+    if (zeropad) {
+        data->type     = OUT_ZERODATA;
+        data->size     = zeropad;
+        lfmt->output(data);
+        ofmt->output(data);
+        data->offset  += zeropad;
+        data->insoffs += zeropad;
+        data->size    += zeropad;  /* Restore original size value */
+    }
 }
 
 static inline void out_rawdata(struct out_data *data, const void *rawdata,
@@ -445,13 +456,37 @@ static inline void out_reserve(struct out_data *data, uint64_t size)
     out(data);
 }
 
-static inline void out_imm(struct out_data *data, const struct operand *opx,
-                           int size, enum out_sign sign)
+static void out_segment(struct out_data *data, const struct operand *opx)
 {
-    data->type =
-        (opx->opflags & OPFLAG_RELATIVE) ? OUT_RELADDR : OUT_ADDRESS;
+    if (opx->opflags & OPFLAG_RELATIVE)
+        nasm_error(ERR_NONFATAL, "segment references cannot be relative");
+
+    data->type = OUT_SEGMENT;
+    data->sign = OUT_UNSIGNED;
+    data->size = 2;
+    data->toffset = opx->offset;
+    data->tsegment = ofmt->segbase(opx->segment | 1);
+    data->twrt = opx->wrt;
+    out(data);
+}
+
+static void out_imm(struct out_data *data, const struct operand *opx,
+                    int size, enum out_sign sign)
+{
+    if (opx->segment != NO_SEG && (opx->segment & 1)) {
+        /*
+         * This is actually a segment reference, but eval() has
+         * already called ofmt->segbase() for us.  Sigh.
+         */
+        if (size < 2)
+            nasm_error(ERR_NONFATAL, "segment reference must be 16 bits");
+
+        data->type = OUT_SEGMENT;
+    } else {
+        data->type = (opx->opflags & OPFLAG_RELATIVE)
+            ? OUT_RELADDR : OUT_ADDRESS;
+    }
     data->sign = sign;
-    data->size = size;
     data->toffset = opx->offset;
     data->tsegment = opx->segment;
     data->twrt = opx->wrt;
@@ -463,6 +498,7 @@ static inline void out_imm(struct out_data *data, const struct operand *opx,
      * already occurred.
      */
     data->relbase = 0;
+    data->size = size;
     out(data);
 }
 
@@ -482,18 +518,6 @@ static void out_reladdr(struct out_data *data, const struct operand *opx,
     out(data);
 }
 
-static inline void out_segment(struct out_data *data,
-                               const struct operand *opx)
-{
-    data->type = OUT_SEGMENT;
-    data->sign = OUT_UNSIGNED;
-    data->size = 2;
-    data->toffset = opx->offset; /* Is this really needed/wanted? */
-    data->tsegment = ofmt->segbase(opx->segment + 1);
-    data->twrt = opx->wrt;
-    out(data);
-}
-
 static bool jmp_match(int32_t segment, int64_t offset, int bits,
                       insn * ins, const struct itemplate *temp)
 {
@@ -504,9 +528,9 @@ static bool jmp_match(int32_t segment, int64_t offset, int bits,
 
     if (((c & ~1) != 0370) || (ins->oprs[0].type & STRICT))
         return false;
-    if (!optimizing)
+    if (!optimizing.level || (optimizing.flag & OPTIM_DISABLE_JMP_MATCH))
         return false;
-    if (optimizing < 0 && c == 0371)
+    if (optimizing.level < 0 && c == 0371)
         return false;
 
     isize = calcsize(segment, offset, bits, ins, temp);
@@ -524,7 +548,7 @@ static bool jmp_match(int32_t segment, int64_t offset, int bits,
     if (is_byte && c == 0371 && ins->prefixes[PPS_REP] == P_BND) {
         /* jmp short (opcode eb) cannot be used with bnd prefix. */
         ins->prefixes[PPS_REP] = P_none;
-        nasm_error(ERR_WARNING | ERR_WARN_BND | ERR_PASS2 ,
+        nasm_error(ERR_WARNING | WARN_BND | ERR_PASS2 ,
                 "jmp short does not init bnd regs - bnd prefix dropped.");
     }
 
@@ -545,10 +569,9 @@ int64_t assemble(int32_t segment, int64_t start, int bits, insn *instruction)
     data.offset = start;
     data.segment = segment;
     data.itemp = NULL;
-    data.sign = OUT_WRAP;
     data.bits = bits;
 
-    wsize = idata_bytes(instruction->opcode);
+    wsize = db_bytes(instruction->opcode);
     if (wsize == -1)
         return 0;
 
@@ -563,12 +586,19 @@ int64_t assemble(int32_t segment, int64_t start, int bits, insn *instruction)
                                " instruction");
                 } else {
                     data.insoffs = 0;
-                    data.type = e->relative ? OUT_RELADDR : OUT_ADDRESS;
                     data.inslen = data.size = wsize;
                     data.toffset = e->offset;
-                    data.tsegment = e->segment;
                     data.twrt = e->wrt;
                     data.relbase = 0;
+                    if (e->segment != NO_SEG && (e->segment & 1)) {
+                        data.tsegment = e->segment;
+                        data.type = OUT_SEGMENT;
+                        data.sign = OUT_UNSIGNED;
+                    } else {
+                        data.tsegment = e->segment;
+                        data.type = e->relative ? OUT_RELADDR : OUT_ADDRESS;
+                        data.sign = OUT_WRAP;
+                    }
                     out(&data);
                 }
             } else if (e->type == EOT_DB_STRING ||
@@ -684,7 +714,6 @@ int64_t assemble(int32_t segment, int64_t start, int bits, insn *instruction)
     end_incbin:
         lfmt->downlevel(LIST_INCBIN);
         if (instruction->times > 1) {
-            lfmt->set_offset(start);
             lfmt->uplevel(LIST_TIMES);
             lfmt->downlevel(LIST_TIMES);
         }
@@ -765,6 +794,12 @@ int64_t assemble(int32_t segment, int64_t start, int bits, insn *instruction)
                            (has_prefix(instruction, PPS_REP, P_REPNE) ?
                             "repne" : "repnz"));
                 break;
+            case MERR_REGSETSIZE:
+                nasm_error(ERR_NONFATAL, "invalid register set size");
+                break;
+            case MERR_REGSET:
+                nasm_error(ERR_NONFATAL, "register set not valid for operand");
+                break;
             default:
                 nasm_error(ERR_NONFATAL,
                            "invalid combination of opcode and operands");
@@ -790,7 +825,7 @@ int64_t insn_size(int32_t segment, int64_t offset, int bits, insn *instruction)
         int32_t isize, osize, wsize;
 
         isize = 0;
-        wsize = idata_bytes(instruction->opcode);
+        wsize = db_bytes(instruction->opcode);
         nasm_assert(wsize > 0);
 
         list_for_each(e, instruction->eops) {
@@ -878,14 +913,14 @@ static void bad_hle_warn(const insn * ins, uint8_t hleok)
 
     case w_lock:
         if (ins->prefixes[PPS_LOCK] != P_LOCK) {
-            nasm_error(ERR_WARNING | ERR_WARN_HLE | ERR_PASS2,
+            nasm_error(ERR_WARNING | WARN_HLE | ERR_PASS2,
                     "%s with this instruction requires lock",
                     prefix_name(rep_pfx));
         }
         break;
 
     case w_inval:
-        nasm_error(ERR_WARNING | ERR_WARN_HLE | ERR_PASS2,
+        nasm_error(ERR_WARNING | WARN_HLE | ERR_PASS2,
                 "%s invalid with this instruction",
                 prefix_name(rep_pfx));
         break;
@@ -1366,7 +1401,7 @@ static int64_t calcsize(int32_t segment, int64_t offset, int bits,
 
     if (has_prefix(ins, PPS_LOCK, P_LOCK) && lockcheck &&
         (!itemp_has(temp,IF_LOCK) || !is_class(MEMORY, ins->oprs[0].type))) {
-        nasm_error(ERR_WARNING | ERR_WARN_LOCK | ERR_PASS2 ,
+        nasm_error(ERR_WARNING | WARN_LOCK | ERR_PASS2 ,
                 "instruction is not lockable");
     }
 
@@ -1651,7 +1686,7 @@ static void gencode(struct out_data *data, insn *ins)
                         "non-absolute expression not permitted as argument %d",
                         c & 7);
             } else if (opy->offset & ~mask) {
-                nasm_error(ERR_WARNING | ERR_PASS2 | ERR_WARN_NOV,
+                nasm_error(ERR_WARNING | ERR_PASS2 | WARN_NOV,
                            "is4 argument exceeds bounds");
             }
             c = opy->offset & mask;
@@ -1674,7 +1709,7 @@ static void gencode(struct out_data *data, insn *ins)
         case4(0254):
             if (absolute_op(opx) &&
                 (int32_t)opx->offset != (int64_t)opx->offset) {
-                nasm_error(ERR_WARNING | ERR_PASS2 | ERR_WARN_NOV,
+                nasm_error(ERR_WARNING | ERR_PASS2 | WARN_NOV,
                         "signed dword immediate exceeds bounds");
             }
             out_imm(data, opx, 4, OUT_SIGNED);
@@ -1744,7 +1779,7 @@ static void gencode(struct out_data *data, insn *ins)
                     /* If this wasn't explicitly byte-sized, warn as though we
                      * had fallen through to the imm16/32/64 case.
                      */
-                    nasm_error(ERR_WARNING | ERR_PASS2 | ERR_WARN_NOV,
+                    nasm_error(ERR_WARNING | ERR_PASS2 | WARN_NOV,
                                "%s value exceeds bounds",
                                (opx->type & BITS8) ? "signed byte" :
                                s == 16 ? "word" :
@@ -2153,7 +2188,7 @@ static enum match_result matches(const struct itemplate *itemp,
     /*
      * Is it legal?
      */
-    if (!(optimizing > 0) && itemp_has(itemp, IF_OPT))
+    if (!(optimizing.level > 0) && itemp_has(itemp, IF_OPT))
 	return MERR_INVALOP;
 
     /*
@@ -2296,9 +2331,14 @@ static enum match_result matches(const struct itemplate *itemp,
         if (~ideco & deco & (Z_MASK|STATICRND_MASK|SAE_MASK))
             return MERR_DECONOTHERE;
 
-        if (itemp->opd[i] & ~type & ~SIZE_MASK) {
+        if (itemp->opd[i] & ~type & ~(SIZE_MASK|REGSET_MASK))
             return MERR_INVALOP;
-        } else if (template_opsize) {
+
+        if (~itemp->opd[i] & type & REGSET_MASK)
+            return (itemp->opd[i] & REGSET_MASK)
+                ? MERR_REGSETSIZE : MERR_REGSET;
+
+        if (template_opsize) {
             if (template_opsize != insn_opsize) {
                 if (insn_opsize) {
                     return MERR_INVALOP;

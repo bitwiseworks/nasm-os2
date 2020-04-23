@@ -692,6 +692,7 @@ enable_option_checking
 enable_largefile
 enable_optimization
 enable_gdb
+enable_panic_abort
 enable_pdf_compression
 enable_sections
 enable_lto
@@ -1319,6 +1320,7 @@ Optional Features:
   --disable-optimization  compile without optimization (-O0) to help debugging
   --enable-gdb            disable optimization and compile with extra debug
                           information for GDB debugger
+  --enable-panic-abort    call abort() on panic to trap in the debugger
   --disable-pdf-compression
                           generate an uncompressed documentation PDF
   --enable-sections       compile with function/data section support
@@ -4806,6 +4808,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -ggdb3"
+
+$as_echo "#define CFLAG_GGDB3 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -4841,6 +4846,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -fno-omit-frame-pointer"
+
+$as_echo "#define CFLAG_FNO_OMIT_FRAME_POINTER 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -4849,6 +4857,20 @@ fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 fi
+
+# Check whether --enable-panic-abort was given.
+if test "${enable_panic_abort+set}" = set; then :
+  enableval=$enable_panic_abort;
+else
+  enableval=no
+fi
+
+ if test x"$enableval" != xno; then :
+  $as_echo "#define ABORT_ON_PANIC 1" >>confdefs.h
+
+fi
+
+
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for suffix of library files" >&5
 $as_echo_n "checking for suffix of library files... " >&6; }
@@ -5293,6 +5315,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -fwrapv"
+
+$as_echo "#define CFLAG_FWRAPV 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -5320,6 +5345,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -U__STRICT_ANSI__"
+
+$as_echo "#define CFLAG_U_STRICT_ANSI 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -5347,6 +5375,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -fno-common"
+
+$as_echo "#define CFLAG_FNO_COMMON 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -6050,18 +6081,6 @@ fi
 
 done
 
-for ac_header in sys/param.h
-do :
-  ac_fn_c_check_header_mongrel "$LINENO" "sys/param.h" "ac_cv_header_sys_param_h" "$ac_includes_default"
-if test "x$ac_cv_header_sys_param_h" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_SYS_PARAM_H 1
-_ACEOF
-
-fi
-
-done
-
 for ac_header in sys/mman.h
 do :
   ac_fn_c_check_header_mongrel "$LINENO" "sys/mman.h" "ac_cv_header_sys_mman_h" "$ac_includes_default"
@@ -6140,6 +6159,17 @@ do :
 if test "x$ac_cv_func_strnlen" = xyes; then :
   cat >>confdefs.h <<_ACEOF
 #define HAVE_STRNLEN 1
+_ACEOF
+
+fi
+done
+
+for ac_func in strrchrnul
+do :
+  ac_fn_c_check_func "$LINENO" "strrchrnul" "ac_cv_func_strrchrnul"
+if test "x$ac_cv_func_strrchrnul" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_STRRCHRNUL 1
 _ACEOF
 
 fi
@@ -6566,93 +6596,17 @@ fi
 done
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_clz" >&5
-$as_echo_n "checking for __builtin_clz... " >&6; }
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-(void)__builtin_clz(0U);
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-
-$as_echo "#define HAVE___BUILTIN_CLZ 1" >>confdefs.h
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_clzl" >&5
-$as_echo_n "checking for __builtin_clzl... " >&6; }
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-(void)__builtin_clzl(0UL);
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-
-$as_echo "#define HAVE___BUILTIN_CLZL 1" >>confdefs.h
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_clzll" >&5
-$as_echo_n "checking for __builtin_clzll... " >&6; }
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int
-main ()
-{
-(void)__builtin_clzll(0ULL);
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-
-$as_echo "#define HAVE___BUILTIN_CLZLL 1" >>confdefs.h
-
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_expect" >&5
 $as_echo_n "checking for __builtin_expect... " >&6; }
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-int
-main ()
-{
-(void)__builtin_expect(1,1);
-  ;
-  return 0;
+$ac_includes_default
+int main(void) {
+    (void)__builtin_expect(1,1);
+    return 0;
 }
+
 _ACEOF
 if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
@@ -6666,6 +6620,147 @@ $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
+
+
+for ac_header in intrin.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "intrin.h" "ac_cv_header_intrin_h" "$ac_includes_default"
+if test "x$ac_cv_header_intrin_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_INTRIN_H 1
+_ACEOF
+ ac_includes_default="$ac_includes_default
+#include <intrin.h>"
+
+fi
+
+done
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_clz" >&5
+$as_echo_n "checking for __builtin_clz... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_clz(0U);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_CLZ 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_clzl" >&5
+$as_echo_n "checking for __builtin_clzl... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_clzl(0UL);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_CLZL 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_clzll" >&5
+$as_echo_n "checking for __builtin_clzll... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_clzll(0ULL);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_CLZLL 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for _BitScanReverse" >&5
+$as_echo_n "checking for _BitScanReverse... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)_BitScanReverse(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE__BITSCANREVERSE 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for _BitScanReverse64" >&5
+$as_echo_n "checking for _BitScanReverse64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)_BitScanReverse64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE__BITSCANREVERSE64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
 
 for ac_func in vsnprintf _vsnprintf
 do :
@@ -6697,6 +6792,17 @@ do :
 if test "x$ac_cv_func_strlcpy" = xyes; then :
   cat >>confdefs.h <<_ACEOF
 #define HAVE_STRLCPY 1
+_ACEOF
+
+fi
+done
+
+for ac_func in strrchrnul
+do :
+  ac_fn_c_check_func "$LINENO" "strrchrnul" "ac_cv_func_strrchrnul"
+if test "x$ac_cv_func_strrchrnul" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_STRRCHRNUL 1
 _ACEOF
 
 fi
@@ -6825,6 +6931,17 @@ cat >>confdefs.h <<_ACEOF
 #define HAVE_DECL_STRNLEN $ac_have_decl
 _ACEOF
 
+ac_fn_c_check_decl "$LINENO" "strrchrnul" "ac_cv_have_decl_strrchrnul" "$ac_includes_default"
+if test "x$ac_cv_have_decl_strrchrnul" = xyes; then :
+  ac_have_decl=1
+else
+  ac_have_decl=0
+fi
+
+cat >>confdefs.h <<_ACEOF
+#define HAVE_DECL_STRRCHRNUL $ac_have_decl
+_ACEOF
+
 
 
   ac_fn_c_check_type "$LINENO" "uintptr_t" "ac_cv_type_uintptr_t" "$ac_includes_default"
@@ -6877,6 +6994,523 @@ fi
 
 
 
+for ac_header in endian.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "endian.h" "ac_cv_header_endian_h" "$ac_includes_default"
+if test "x$ac_cv_header_endian_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_ENDIAN_H 1
+_ACEOF
+ ac_includes_default="$ac_includes_default
+#include <endian.h>"
+
+fi
+
+done
+for ac_header in sys/endian.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "sys/endian.h" "ac_cv_header_sys_endian_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_endian_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_SYS_ENDIAN_H 1
+_ACEOF
+ ac_includes_default="$ac_includes_default
+#include <sys/endian.h>"
+
+fi
+
+done
+for ac_header in machine/endian.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "machine/endian.h" "ac_cv_header_machine_endian_h" "$ac_includes_default"
+if test "x$ac_cv_header_machine_endian_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_MACHINE_ENDIAN_H 1
+_ACEOF
+ ac_includes_default="$ac_includes_default
+#include <machine/endian.h>"
+
+fi
+
+done
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for cpu_to_le16" >&5
+$as_echo_n "checking for cpu_to_le16... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)cpu_to_le16(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_CPU_TO_LE16 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for cpu_to_le32" >&5
+$as_echo_n "checking for cpu_to_le32... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)cpu_to_le32(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_CPU_TO_LE32 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for cpu_to_le64" >&5
+$as_echo_n "checking for cpu_to_le64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)cpu_to_le64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_CPU_TO_LE64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __cpu_to_le16" >&5
+$as_echo_n "checking for __cpu_to_le16... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__cpu_to_le16(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___CPU_TO_LE16 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __cpu_to_le32" >&5
+$as_echo_n "checking for __cpu_to_le32... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__cpu_to_le32(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___CPU_TO_LE32 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __cpu_to_le64" >&5
+$as_echo_n "checking for __cpu_to_le64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__cpu_to_le64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___CPU_TO_LE64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for htole16" >&5
+$as_echo_n "checking for htole16... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)htole16(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_HTOLE16 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for htole32" >&5
+$as_echo_n "checking for htole32... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)htole32(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_HTOLE32 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for htole64" >&5
+$as_echo_n "checking for htole64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)htole64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_HTOLE64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __bswap_16" >&5
+$as_echo_n "checking for __bswap_16... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__bswap_16(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BSWAP_16 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __bswap_32" >&5
+$as_echo_n "checking for __bswap_32... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__bswap_32(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BSWAP_32 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __bswap_64" >&5
+$as_echo_n "checking for __bswap_64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__bswap_64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BSWAP_64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_bswap16" >&5
+$as_echo_n "checking for __builtin_bswap16... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_bswap16(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_BSWAP16 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_bswap32" >&5
+$as_echo_n "checking for __builtin_bswap32... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_bswap32(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_BSWAP32 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_bswap64" >&5
+$as_echo_n "checking for __builtin_bswap64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_bswap64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_BSWAP64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for _byteswap_ushort" >&5
+$as_echo_n "checking for _byteswap_ushort... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)_byteswap_ushort(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE__BYTESWAP_USHORT 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for _byteswap_ulong" >&5
+$as_echo_n "checking for _byteswap_ulong... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)_byteswap_ulong(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE__BYTESWAP_ULONG 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for _byteswap_uint64" >&5
+$as_echo_n "checking for _byteswap_uint64... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)_byteswap_uint64(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE__BYTESWAP_UINT64 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for __builtin_constant_p" >&5
+$as_echo_n "checking for __builtin_constant_p... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+int main(void) {
+    (void)__builtin_constant_p(0);
+    return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE___BUILTIN_CONSTANT_P 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC accepts -Werror=attributes" >&5
 $as_echo_n "checking if $CC accepts -Werror=attributes... " >&6; }
  pa_add_cflags__old_cflags="$CFLAGS"
@@ -6896,6 +7530,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=attributes"
+
+$as_echo "#define CFLAG_WERROR_ATTRIBUTES 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -6908,13 +7545,14 @@ $as_echo_n "checking if $CC supports the noreturn function attribute... " >&6; }
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void *  __attribute__((noreturn))
   bar(int);
-void *foo(void);
-void *foo(void)
+void * foo(void);
+void * foo(void)
 {
-	return bar(1);
+	return
+		bar(1);
 }
 
 _ACEOF
@@ -6935,13 +7573,14 @@ $as_echo_n "checking if $CC supports the returns_nonnull function attribute... "
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void *  __attribute__((returns_nonnull))
   bar(int);
-void *foo(void);
-void *foo(void)
+void * foo(void);
+void * foo(void)
 {
-	return bar(1);
+	return
+		bar(1);
 }
 
 _ACEOF
@@ -6962,13 +7601,14 @@ $as_echo_n "checking if $CC supports the malloc function attribute... " >&6; }
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void *  __attribute__((malloc))
   bar(int);
-void *foo(void);
-void *foo(void)
+void * foo(void);
+void * foo(void)
 {
-	return bar(1);
+	return
+		bar(1);
 }
 
 _ACEOF
@@ -6989,13 +7629,14 @@ $as_echo_n "checking if $CC supports the alloc_size function attribute... " >&6;
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void *  __attribute__((alloc_size(1)))
   bar(int);
-void *foo(void);
-void *foo(void)
+void * foo(void);
+void * foo(void)
 {
-	return bar(1);
+	return
+		bar(1);
 }
 
 _ACEOF
@@ -7011,18 +7652,47 @@ $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports the sentinel function attribute" >&5
+$as_echo_n "checking if $CC supports the sentinel function attribute... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+extern void *  __attribute__((sentinel))
+  bar(const char *, ...);
+void * foo(void);
+void * foo(void)
+{
+	return
+		bar("a","b",NULL);
+}
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_FUNC_ATTRIBUTE_SENTINEL 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports the format function attribute" >&5
 $as_echo_n "checking if $CC supports the format function attribute... " >&6; }
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern int  __attribute__((format(printf,1,2)))
   bar(const char *, ...);
-void *foo(void);
-void *foo(void)
+int foo(void);
+int foo(void)
 {
-	return bar("%d",1);
+	return
+		bar("%d",1);
 }
 
 _ACEOF
@@ -7043,13 +7713,14 @@ $as_echo_n "checking if $CC supports the const function attribute... " >&6; }
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void *  __attribute__((const))
   bar(int);
-void *foo(void);
-void *foo(void)
+void * foo(void);
+void * foo(void)
 {
-	return bar(1);
+	return
+		bar(1);
 }
 
 _ACEOF
@@ -7070,13 +7741,14 @@ $as_echo_n "checking if $CC supports the pure function attribute... " >&6; }
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void *  __attribute__((pure))
   bar(int);
-void *foo(void);
-void *foo(void)
+void * foo(void);
+void * foo(void)
 {
-	return bar(1);
+	return
+		bar(1);
 }
 
 _ACEOF
@@ -7092,12 +7764,40 @@ $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports the cold function attribute" >&5
+$as_echo_n "checking if $CC supports the cold function attribute... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+extern void *  __attribute__((cold))
+  bar(int);
+void * foo(void);
+void * foo(void)
+{
+	return
+		bar(1);
+}
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_FUNC_ATTRIBUTE_COLD 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports the error function attribute" >&5
 $as_echo_n "checking if $CC supports the error function attribute... " >&6; }
  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
-#include <stdarg.h>
+$ac_includes_default
 extern void __attribute__((error("message"))) barf(void);
 void foo(void);
 void foo(void)
@@ -7150,6 +7850,9 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cldflags__old_cflags -ffunction-sections"
   LDFLAGS="$pa_add_cldflags__old_ldflags -ffunction-sections"
+
+$as_echo "#define CFLAG_FFUNCTION_SECTIONS 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7180,6 +7883,9 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cldflags__old_cflags -fdata-sections"
   LDFLAGS="$pa_add_cldflags__old_ldflags -fdata-sections"
+
+$as_echo "#define CFLAG_FDATA_SECTIONS 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7210,6 +7916,9 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cldflags__old_cflags -Wl,--gc-sections"
   LDFLAGS="$pa_add_cldflags__old_ldflags -Wl,--gc-sections"
+
+$as_echo "#define CFLAG_WL_GC_SECTIONS 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7251,6 +7960,9 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cldflags__old_cflags -flto"
   LDFLAGS="$pa_add_cldflags__old_ldflags -flto"
+
+$as_echo "#define CFLAG_FLTO 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7378,6 +8090,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -fno-omit-frame-pointer"
+
+$as_echo "#define CFLAG_FNO_OMIT_FRAME_POINTER 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7407,6 +8122,9 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cldflags__old_cflags -fsanitize=address"
   LDFLAGS="$pa_add_cldflags__old_ldflags -fsanitize=address"
+
+$as_echo "#define CFLAG_FSANITIZE_ADDRESS 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7437,6 +8155,9 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cldflags__old_cflags -fsanitize=undefined"
   LDFLAGS="$pa_add_cldflags__old_ldflags -fsanitize=undefined"
+
+$as_echo "#define CFLAG_FSANITIZE_UNDEFINED 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7447,6 +8168,40 @@ rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 fi
 
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC accepts -fvisibility=hidden" >&5
+$as_echo_n "checking if $CC accepts -fvisibility=hidden... " >&6; }
+ pa_add_cldflags__old_cflags="$CFLAGS"
+ CFLAGS="$CFLAGS -fvisibility=hidden"
+ pa_add_cldflags__old_ldflags="$LDFLAGS"
+ LDFLAGS="$LDFLAGS -fvisibility=hidden"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$ac_includes_default
+int
+main ()
+{
+printf("Hello, World!\n");
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+  CFLAGS="$pa_add_cldflags__old_cflags -fvisibility=hidden"
+  LDFLAGS="$pa_add_cldflags__old_ldflags -fvisibility=hidden"
+
+$as_echo "#define CFLAG_FVISIBILITY_HIDDEN 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  CFLAGS="$pa_add_cldflags__old_cflags"
+  LDFLAGS="$pa_add_cldflags__old_ldflags"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC accepts -W" >&5
 $as_echo_n "checking if $CC accepts -W... " >&6; }
@@ -7467,6 +8222,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -W"
+
+$as_echo "#define CFLAG_W 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7493,6 +8251,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Wall"
+
+$as_echo "#define CFLAG_WALL 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7519,6 +8280,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -pedantic"
+
+$as_echo "#define CFLAG_PEDANTIC 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7545,6 +8309,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=unknown-warning-option"
+
+$as_echo "#define CFLAG_WERROR_UNKNOWN_WARNING_OPTION 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7571,6 +8338,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Wno-pedantic-ms-format"
+
+$as_echo "#define CFLAG_WPEDANTIC_MS_FORMAT 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7597,6 +8367,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Wc90-c99-compat"
+
+$as_echo "#define CFLAG_WC90_C99_COMPAT 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7623,6 +8396,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Wno-long-long"
+
+$as_echo "#define CFLAG_WLONG_LONG 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7630,6 +8406,65 @@ $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC accepts -Wstringop-truncation" >&5
+$as_echo_n "checking if $CC accepts -Wstringop-truncation... " >&6; }
+ pa_add_cflags__old_cflags="$CFLAGS"
+ CFLAGS="$CFLAGS -Wstringop-truncation"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$ac_includes_default
+int
+main ()
+{
+printf("Hello, World!\n");
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+  CFLAGS="$pa_add_cflags__old_cflags -Wno-stringop-truncation"
+
+$as_echo "#define CFLAG_WSTRINGOP_TRUNCATION 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  CFLAGS="$pa_add_cflags__old_cflags"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC accepts -Wshift-negative-value" >&5
+$as_echo_n "checking if $CC accepts -Wshift-negative-value... " >&6; }
+ pa_add_cflags__old_cflags="$CFLAGS"
+ CFLAGS="$CFLAGS -Wshift-negative-value"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$ac_includes_default
+int
+main ()
+{
+printf("Hello, World!\n");
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+  CFLAGS="$pa_add_cflags__old_cflags -Wno-shift-negative-value"
+
+$as_echo "#define CFLAG_WSHIFT_NEGATIVE_VALUE 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  CFLAGS="$pa_add_cflags__old_cflags"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
 # Check whether --enable-werror was given.
 if test "${enable_werror+set}" = set; then :
   enableval=$enable_werror;
@@ -7657,6 +8492,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror"
+
+$as_echo "#define CFLAG_WERROR 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7684,6 +8522,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=implicit"
+
+$as_echo "#define CFLAG_WERROR_IMPLICIT 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7710,6 +8551,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=missing-braces"
+
+$as_echo "#define CFLAG_WERROR_MISSING_BRACES 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7736,6 +8580,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=return-type"
+
+$as_echo "#define CFLAG_WERROR_RETURN_TYPE 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7762,6 +8609,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=trigraphs"
+
+$as_echo "#define CFLAG_WERROR_TRIGRAPHS 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7788,6 +8638,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=pointer-arith"
+
+$as_echo "#define CFLAG_WERROR_POINTER_ARITH 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7814,6 +8667,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=strict-prototypes"
+
+$as_echo "#define CFLAG_WERROR_STRICT_PROTOTYPES 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7840,6 +8696,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=missing-prototypes"
+
+$as_echo "#define CFLAG_WERROR_MISSING_PROTOTYPES 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7866,6 +8725,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=missing-declarations"
+
+$as_echo "#define CFLAG_WERROR_MISSING_DECLARATIONS 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7892,6 +8754,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=comment"
+
+$as_echo "#define CFLAG_WERROR_COMMENT 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7918,6 +8783,9 @@ if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
   CFLAGS="$pa_add_cflags__old_cflags -Werror=vla"
+
+$as_echo "#define CFLAG_WERROR_VLA 1" >>confdefs.h
+
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
@@ -7928,6 +8796,65 @@ rm -f core conftest.err conftest.$ac_objext \
 
 fi
 
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC supports C99 external inlines" >&5
+$as_echo_n "checking if $CC supports C99 external inlines... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+$ac_includes_default
+
+/* Don't mistake GNU inlines for c99 */
+#ifdef __GNUC_GNU_INLINE__
+# error "Using gnu inline standard"
+#endif
+
+inline int foo(int x)
+{
+	return x+1;
+}
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+
+$as_echo "#define HAVE_STDC_INLINE 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if $CC accepts -fgnu89-inline" >&5
+$as_echo_n "checking if $CC accepts -fgnu89-inline... " >&6; }
+ pa_add_cflags__old_cflags="$CFLAGS"
+ CFLAGS="$CFLAGS -fgnu89-inline"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$ac_includes_default
+int
+main ()
+{
+printf("Hello, World!\n");
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+  CFLAGS="$pa_add_cflags__old_cflags -fgnu89-inline"
+
+$as_echo "#define CFLAG_FGNU89_INLINE 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  CFLAGS="$pa_add_cflags__old_cflags"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 
 # Check whether --enable-ccache was given.
 if test "${enable_ccache+set}" = set; then :

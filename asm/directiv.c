@@ -44,6 +44,7 @@
 
 #include "nasm.h"
 #include "nasmlib.h"
+#include "ilog2.h"
 #include "error.h"
 #include "float.h"
 #include "stdscan.h"
@@ -98,8 +99,10 @@ static iflag_t get_cpu(const char *value)
         { NULL, IF_PLEVEL }     /* Error and final default entry */
     };
 
+    iflag_clear_all(&r);
+
     for (cpu = cpunames; cpu->name; cpu++) {
-        if (!strcmp(value, cpu->name))
+        if (!nasm_stricmp(value, cpu->name))
             break;
     }
 
@@ -206,6 +209,7 @@ bool process_directives(char *directive)
     struct tokenval tokval;
     bool bad_param = false;
     int pass2 = passn > 1 ? 2 : 1;
+    enum label_type type;
 
     d = parse_directive_line(&directive, &value);
 
@@ -248,9 +252,8 @@ bool process_directives(char *directive)
             nasm_error(pass0 < 2 ? ERR_NONFATAL : ERR_PANIC,
                        "segment name `%s' not recognized", value);
         } else {
-            in_absolute = false;
-            location.segment = seg;
             globalbits = sb;
+            switch_segment(seg);
         }
         break;
     }
@@ -290,140 +293,85 @@ bool process_directives(char *directive)
         break;
     }
 
-    case D_EXTERN:          /* [EXTERN label:special] */
-        if (*value == '$')
-            value++;        /* skip initial $ if present */
-        if (pass0 == 2) {
-            q = value;
-            while (*q && *q != ':')
-                q++;
-            if (*q == ':') {
-                *q++ = '\0';
-                ofmt->symdef(value, 0L, 0L, 3, q);
-            }
-        } else if (passn == 1) {
-            bool validid = true;
-            q = value;
-            if (!isidstart(*q))
-                validid = false;
-            while (*q && *q != ':') {
-                if (!isidchar(*q))
-                    validid = false;
-                q++;
-            }
-            if (!validid) {
-                nasm_error(ERR_NONFATAL, "identifier expected after EXTERN");
-                break;
-            }
-            if (*q == ':') {
-                *q++ = '\0';
-                special = q;
-            } else
-                special = NULL;
-            if (!is_extern(value)) {        /* allow re-EXTERN to be ignored */
-                int temp = pass0;
-                pass0 = 1;  /* fake pass 1 in labels.c */
-                declare_as_global(value, special);
-                define_label(value, seg_alloc(), 0L, NULL,
-                             false, true);
-                pass0 = temp;
-            }
-        }           /* else  pass0 == 1 */
-        break;
-
     case D_BITS:            /* [BITS bits] */
         globalbits = get_bits(value);
         break;
 
-    case D_GLOBAL:          /* [GLOBAL symbol:special] */
+    case D_GLOBAL:          /* [GLOBAL|STATIC|EXTERN|COMMON symbol:special] */
+        type = LBL_GLOBAL;
+        goto symdef;
+    case D_STATIC:
+        type = LBL_STATIC;
+        goto symdef;
+    case D_EXTERN:
+        type = LBL_EXTERN;
+        goto symdef;
+    case D_COMMON:
+        type = LBL_COMMON;
+        goto symdef;
+
+    symdef:
+    {
+        bool validid = true;
+        int64_t size = 0;
+        char *sizestr;
+        bool rn_error;
+
         if (*value == '$')
             value++;        /* skip initial $ if present */
-        if (pass0 == 2) {   /* pass 2 */
-            q = value;
-            while (*q && *q != ':')
-                q++;
-            if (*q == ':') {
-                *q++ = '\0';
-                ofmt->symdef(value, 0L, 0L, 3, q);
-            }
-        } else if (pass2 == 1) {    /* pass == 1 */
-            bool validid = true;
 
-            q = value;
-            if (!isidstart(*q))
-                validid = false;
-            while (*q && *q != ':') {
+        q = value;
+        if (!isidstart(*q)) {
+            validid = false;
+        } else {
+            q++;
+            while (*q && *q != ':' && !nasm_isspace(*q)) {
                 if (!isidchar(*q))
                     validid = false;
                 q++;
             }
-            if (!validid) {
-                nasm_error(ERR_NONFATAL,
-                           "identifier expected after GLOBAL");
-                break;
-            }
-            if (*q == ':') {
-                *q++ = '\0';
-                special = q;
-            } else
-                special = NULL;
-            declare_as_global(value, special);
-        }           /* pass == 1 */
-        break;
-
-    case D_COMMON:          /* [COMMON symbol size:special] */
-    {
-        int64_t size;
-	bool rn_error;
-	bool validid;
-
-        if (*value == '$')
-            value++;        /* skip initial $ if present */
-        p = value;
-        validid = true;
-        if (!isidstart(*p))
-            validid = false;
-        while (*p && !nasm_isspace(*p)) {
-            if (!isidchar(*p))
-                validid = false;
-            p++;
         }
         if (!validid) {
-            nasm_error(ERR_NONFATAL, "identifier expected after COMMON");
-            break;
-        }
-        if (*p) {
-            p = nasm_zap_spaces_fwd(p);
-            q = p;
-            while (*q && *q != ':')
-                q++;
-            if (*q == ':') {
-                *q++ = '\0';
-                special = q;
-            } else {
-                special = NULL;
-            }
-            size = readnum(p, &rn_error);
-            if (rn_error) {
-                nasm_error(ERR_NONFATAL,
-                           "invalid size specified"
-                           " in COMMON declaration");
-                break;
-            }
-        } else {
             nasm_error(ERR_NONFATAL,
-                       "no size specified in"
-                       " COMMON declaration");
+                       "identifier expected after %s, got `%s'",
+                       directive, value);
             break;
         }
 
-        if (pass0 < 2) {
-            define_common(value, seg_alloc(), size, special);
-        } else if (pass0 == 2) {
-            if (special)
-                ofmt->symdef(value, 0L, 0L, 3, special);
+        if (nasm_isspace(*q)) {
+            *q++ = '\0';
+            sizestr = q = nasm_skip_spaces(q);
+            q = strchr(q, ':');
+        } else {
+            sizestr = NULL;
         }
-        break;
+
+        if (q && *q == ':') {
+            *q++ = '\0';
+            special = q;
+        } else {
+            special = NULL;
+        }
+
+        if (type == LBL_COMMON) {
+            if (sizestr)
+                size = readnum(sizestr, &rn_error);
+            if (!sizestr || rn_error)
+                nasm_error(ERR_NONFATAL,
+                           "%s size specified in common declaration",
+                           sizestr ? "invalid" : "no");
+        } else if (sizestr) {
+            nasm_error(ERR_NONFATAL, "invalid syntax in %s declaration",
+                       directive);
+        }
+
+        if (!declare_label(value, type, special))
+            break;
+        
+        if (type == LBL_COMMON || type == LBL_EXTERN)
+            define_label(value, 0, size, false);
+
+    	break;
     }
 
     case D_ABSOLUTE:        /* [ABSOLUTE address] */
@@ -451,6 +399,7 @@ bool process_directives(char *directive)
                        "in pass two");
         in_absolute = true;
         location.segment = NO_SEG;
+        location.offset = absolute.offset;
         break;
     }
 
@@ -494,7 +443,7 @@ bool process_directives(char *directive)
 
     case D_WARNING:         /* [WARNING {+|-|*}warn-name] */
         if (!set_warning_status(value)) {
-            nasm_error(ERR_WARNING|ERR_WARN_UNK_WARNING,
+            nasm_error(ERR_WARNING|WARN_UNK_WARNING,
                        "unknown warning option: %s", value);
         }
         break;

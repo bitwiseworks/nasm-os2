@@ -1,6 +1,6 @@
 /* ----------------------------------------------------------------------- *
  *
- *   Copyright 1996-2017 The NASM Authors - All Rights Reserved
+ *   Copyright 1996-2018 The NASM Authors - All Rights Reserved
  *   See the file AUTHORS included with the NASM distribution for
  *   the specific copyright holders.
  *
@@ -39,6 +39,7 @@
 #define NASM_NASMLIB_H
 
 #include "compiler.h"
+#include "bytesex.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -78,6 +79,8 @@ void * safe_realloc(2) nasm_realloc(void *, size_t);
 void nasm_free(void *);
 char * safe_alloc nasm_strdup(const char *);
 char * safe_alloc nasm_strndup(const char *, size_t);
+char * safe_alloc nasm_strcat(const char *one, const char *two);
+char * safe_alloc end_with_null nasm_strcatn(const char *one, ...);
 
 /* Assert the argument is a pointer without evaluating it */
 #define nasm_assert_pointer(p) ((void)sizeof(*(p)))
@@ -110,7 +113,7 @@ void nasm_write(const void *, size_t, FILE *);
 /*
  * NASM assert failure
  */
-no_return nasm_assert_failed(const char *, int, const char *);
+fatal_func nasm_assert_failed(const char *, int, const char *);
 #define nasm_assert(x)                                          \
     do {                                                        \
         if (unlikely(!(x)))                                     \
@@ -177,7 +180,7 @@ size_t pure_func strnlen(const char *, size_t);
  * Convert a string into a number, using NASM number rules. Sets
  * `*error' to true if an error occurs, and false otherwise.
  */
-int64_t readnum(char *str, bool *error);
+int64_t readnum(const char *str, bool *error);
 
 /*
  * Convert a character constant into a number. Sets
@@ -188,17 +191,14 @@ int64_t readnum(char *str, bool *error);
 int64_t readstrnum(char *str, int length, bool *warn);
 
 /*
- * seg_init: Initialise the segment-number allocator.
  * seg_alloc: allocate a hitherto unused segment number.
  */
-void pure_func seg_init(void);
-int32_t pure_func seg_alloc(void);
+int32_t seg_alloc(void);
 
 /*
- * many output formats will be able to make use of this: a standard
- * function to add an extension to the name of the input file
+ * Add/replace or remove an extension to the end of a filename
  */
-void standard_extension(char *inname, char *outname, char *extension);
+const char *filename_set_extension(const char *inname, const char *extension);
 
 /*
  * Utility macros...
@@ -247,103 +247,7 @@ void standard_extension(char *inname, char *outname, char *extension);
 #define IS_ALIGNED(v, a)        (((v) & ((a) - 1)) == 0)
 
 /*
- * some handy macros that will probably be of use in more than one
- * output format: convert integers into little-endian byte packed
- * format in memory
- */
-
-#if X86_MEMORY
-
-#define WRITECHAR(p,v)                          \
-    do {                                        \
-        *(uint8_t *)(p) = (v);                  \
-        (p) += 1;                               \
-    } while (0)
-
-#define WRITESHORT(p,v)                         \
-    do {                                        \
-        *(uint16_t *)(p) = (v);                 \
-        (p) += 2;                               \
-    } while (0)
-
-#define WRITELONG(p,v)                          \
-    do {                                        \
-        *(uint32_t *)(p) = (v);                 \
-        (p) += 4;                               \
-    } while (0)
-
-#define WRITEDLONG(p,v)                         \
-    do {                                        \
-        *(uint64_t *)(p) = (v);                 \
-        (p) += 8;                               \
-    } while (0)
-
-#define WRITEADDR(p,v,s)                        \
-    do {                                        \
-        uint64_t _wa_v = (v);                   \
-        memcpy((p), &_wa_v, (s));               \
-        (p) += (s);                             \
-    } while (0)
-
-#else /* !X86_MEMORY */
-
-#define WRITECHAR(p,v)                          \
-    do {                                        \
-        uint8_t *_wc_p = (uint8_t *)(p);        \
-        uint8_t _wc_v = (v);                    \
-        _wc_p[0] = _wc_v;                       \
-        (p) = (void *)(_wc_p + 1);              \
-    } while (0)
-
-#define WRITESHORT(p,v)                         \
-    do {                                        \
-        uint8_t *_ws_p = (uint8_t *)(p);        \
-        uint16_t _ws_v = (v);                   \
-        _ws_p[0] = _ws_v;                       \
-        _ws_p[1] = _ws_v >> 8;                  \
-        (p) = (void *)(_ws_p + 2);              \
-    } while (0)
-
-#define WRITELONG(p,v)                          \
-    do {                                        \
-        uint8_t *_wl_p = (uint8_t *)(p);        \
-        uint32_t _wl_v = (v);                   \
-        _wl_p[0] = _wl_v;                       \
-        _wl_p[1] = _wl_v >> 8;                  \
-        _wl_p[2] = _wl_v >> 16;                 \
-        _wl_p[3] = _wl_v >> 24;                 \
-        (p) = (void *)(_wl_p + 4);              \
-    } while (0)
-
-#define WRITEDLONG(p,v)                         \
-    do {                                        \
-        uint8_t *_wq_p = (uint8_t *)(p);        \
-        uint64_t _wq_v = (v);                   \
-        _wq_p[0] = _wq_v;                       \
-        _wq_p[1] = _wq_v >> 8;                  \
-        _wq_p[2] = _wq_v >> 16;                 \
-        _wq_p[3] = _wq_v >> 24;                 \
-        _wq_p[4] = _wq_v >> 32;                 \
-        _wq_p[5] = _wq_v >> 40;                 \
-        _wq_p[6] = _wq_v >> 48;                 \
-        _wq_p[7] = _wq_v >> 56;                 \
-        (p) = (void *)(_wq_p + 8);              \
-    } while (0)
-
-#define WRITEADDR(p,v,s)                        \
-    do {                                        \
-        int _wa_s = (s);                        \
-        uint64_t _wa_v = (v);                   \
-        while (_wa_s--) {                       \
-            WRITECHAR(p,_wa_v);                 \
-            _wa_v >>= 8;                        \
-        }                                       \
-    } while(0)
-
-#endif
-
-/*
- * and routines to do the same thing to a file
+ * Routines to write littleendian data to a file
  */
 #define fwriteint8_t(d,f) putc(d,f)
 void fwriteint16_t(uint16_t data, FILE * fp);
@@ -379,8 +283,6 @@ void src_set(int32_t line, const char *filename);
  * checked, -2 if the name changed and (new-old) if just the line changed.
  */
 int32_t src_get(int32_t *xline, const char **xname);
-
-char *nasm_strcat(const char *one, const char *two);
 
 char *nasm_skip_spaces(const char *p);
 char *nasm_skip_word(const char *p);
@@ -508,17 +410,5 @@ static inline int64_t const_func signed_bits(int64_t value, int bits)
 
 /* check if value is power of 2 */
 #define is_power2(v)   ((v) && ((v) & ((v) - 1)) == 0)
-
-/*
- * floor(log2(v))
- */
-int const_func ilog2_32(uint32_t v);
-int const_func ilog2_64(uint64_t v);
-
-/*
- * v == 0 ? 0 : is_power2(x) ? ilog2_X(v) : -1
- */
-int const_func alignlog2_32(uint32_t v);
-int const_func alignlog2_64(uint64_t v);
 
 #endif

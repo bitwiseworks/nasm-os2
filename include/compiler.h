@@ -87,6 +87,53 @@
 # include <sys/types.h>
 #endif
 
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#elif defined(HAVE_SYS_ENDIAN_H)
+# include <sys/endian.h>
+#elif defined(HAVE_MACHINE_ENDIAN_H)
+# include <machine/endian.h>
+#endif
+
+/*
+ * If we have BYTE_ORDER defined, or the compiler provides
+ * __BIG_ENDIAN__ or __LITTLE_ENDIAN__, trust it over what autoconf
+ * came up with, especially since autoconf obviously can't figure
+ * things out for a universal compiler.
+ */
+#if defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
+# undef WORDS_LITTLEENDIAN
+# undef WORDS_BIGENDIAN
+# define WORDS_BIGENDIAN 1
+#elif defined(__LITTLE_ENDIAN__) && !defined(__BIG_ENDIAN__)
+# undef WORDS_LITTLEENDIAN
+# undef WORDS_BIGENDIAN
+# define WORDS_LITTLEENDIAN 1
+#elif defined(BYTE_ORDER) && defined(LITTLE_ENDIAN) && defined(BIG_ENDIAN)
+# undef WORDS_LITTLEENDIAN
+# undef WORDS_BIGENDIAN
+# if BYTE_ORDER == LITTLE_ENDIAN
+#  define WORDS_LITTLEENDIAN 1
+# elif BYTE_ORDER == BIG_ENDIAN
+#  define WORDS_BIGENDIAN 1
+# endif
+#endif
+
+/*
+ * Define this to 1 for faster performance if this is a littleendian
+ * platform *and* it can do arbitrary unaligned memory references.  It
+ * is safe to leave it defined to 0 even if that is true.
+ */
+#if defined(__386__) || defined(__i386__) || defined(__x86_64__) \
+    || defined(_M_IX86) || defined(_M_X64)
+# define X86_MEMORY 1
+# undef WORDS_BIGENDIAN
+# undef WORDS_LITTLEENDIAN
+# define WORDS_LITTLEENDIAN 1
+#else
+# define X86_MEMORY 0
+#endif
+
 /* Some versions of MSVC have these only with underscores in front */
 #ifndef HAVE_SNPRINTF
 # ifdef HAVE__SNPRINTF
@@ -106,6 +153,10 @@ int vsnprintf(char *, size_t, const char *, va_list);
 
 #if !defined(HAVE_STRLCPY) || !HAVE_DECL_STRLCPY
 size_t strlcpy(char *, const char *, size_t);
+#endif
+
+#if !defined(HAVE_STRCHRNUL) || !HAVE_DECL_STRCHRNUL
+char *strrchrnul(const char *, int);
 #endif
 
 #ifndef __cplusplus		/* C++ has false, true, bool as keywords */
@@ -161,17 +212,32 @@ size_t strnlen(const char *s, size_t maxlen);
 #endif
 
 /*
- * Define this to 1 for faster performance if this is a littleendian
- * platform which can do unaligned memory references.  It is safe
- * to leave it defined to 0 even if that is true.
+ * Hack to support external-linkage inline functions
  */
-#if defined(__386__) || defined(__i386__) || defined(__x86_64__)
-# define X86_MEMORY 1
-# ifndef WORDS_LITTLEENDIAN
-#  define WORDS_LITTLEENDIAN 1
+#ifndef HAVE_STDC_INLINE
+# ifdef __GNUC__
+#  ifdef __GNUC_STDC_INLINE__
+#   define HAVE_STDC_INLINE
+#  else
+#   define HAVE_GNU_INLINE
+#  endif
+# elif defined(__GNUC_GNU_INLINE__)
+/* Some other compiler implementing only GNU inline semantics? */
+#   define HAVE_GNU_INLINE
+# elif defined(__STDC_VERSION__)
+#  if __STDC_VERSION__ >= 199901L
+#   define HAVE_STDC_INLINE
+#  endif
 # endif
+#endif
+
+#ifdef HAVE_STDC_INLINE
+# define extern_inline inline
+#elif defined(HAVE_GNU_INLINE)
+# define extern_inline extern inline
+# define inline_prototypes
 #else
-# define X86_MEMORY 0
+# define inline_prototypes
 #endif
 
 /*
@@ -198,17 +264,23 @@ size_t strnlen(const char *s, size_t maxlen);
 #ifdef HAVE_FUNC_ATTRIBUTE_MALLOC
 # define safe_alloc never_null __attribute__((malloc))
 #else
-# define safe_alloc
+# define safe_alloc never_null
 #endif
 
 #ifdef HAVE_FUNC_ATTRIBUTE_ALLOC_SIZE
-#   define safe_malloc(s) safe_alloc __attribute__((alloc_size(s)))
-#   define safe_malloc2(s1,s2) safe_alloc __attribute__((alloc_size(s1,s2)))
-#   define safe_realloc(s) never_null __attribute__((alloc_size(s)))
+# define safe_malloc(s) safe_alloc __attribute__((alloc_size(s)))
+# define safe_malloc2(s1,s2) safe_alloc __attribute__((alloc_size(s1,s2)))
+# define safe_realloc(s) never_null __attribute__((alloc_size(s)))
 #else
 # define safe_malloc(s) safe_alloc
 # define safe_malloc2(s1,s2) safe_alloc
 # define safe_realloc(s) never_null
+#endif
+
+#ifdef HAVE_FUNC_ATTRIBUTE_SENTINEL
+# define end_with_null __attribute__((sentinel))
+#else
+# define end_with_null
 #endif
 
 /*
@@ -224,6 +296,22 @@ size_t strnlen(const char *s, size_t maxlen);
 #else
 # define no_return void
 #endif
+
+/*
+ * How to tell the compiler that a function is unlikely to be executed.
+ * This differs from unlikely() in that it is applied to a function call,
+ * not a boolean condition.
+ */
+#ifdef HAVE_FUNC_ATTRIBUTE_COLD
+# define unlikely_func __attribute__((cold))
+#else
+# define unlikely_func
+#endif
+
+/*
+ * A fatal function is both unlikely and no_return
+ */
+#define fatal_func no_return unlikely_func
 
 /*
  * How to tell the compiler that a function takes a printf-like string
@@ -253,6 +341,13 @@ size_t strnlen(const char *s, size_t maxlen);
 # define pure_func __attribute__((pure))
 #else
 # define pure_func
+#endif
+
+/* Determine probabilistically if something is a compile-time constant */
+#ifdef HAVE___BUILTIN_CONSTANT_P
+# define is_constant(x) __builtin_constant_p(x)
+#else
+# define is_constant(x) false
 #endif
 
 /* Watcom doesn't handle switch statements with 64-bit types, hack around it */
